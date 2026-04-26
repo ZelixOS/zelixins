@@ -1,0 +1,9 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Type=Application
+Name=Install ZelixOS
+Comment=Install ZelixOS to your hard drive
+Exec=sudo python /usr/share/zelixins/myself.py
+Icon=/usr/share/zelix/zelix-icon.png
+Terminal=false
+Categories=System;Installer;
