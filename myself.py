@@ -1241,10 +1241,8 @@ class SummaryPage(InstallerPage):
             arch_creds["!root-password"] = root_pw
 
         # --- Write to disk ---
-        dirr = os.path.dirname(os.path.abspath(__file__))
-
-        config_path = os.path.join(dirr, "zelix_config.json")
-        creds_path  = os.path.join(dirr, "zelix_creds.json")
+        config_path = "/tmp/zelix_config.json"
+        creds_path  = "/tmp/zelix_creds.json"
 
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(arch_config, f, indent=4, ensure_ascii=False)
@@ -1305,9 +1303,8 @@ class InstallProgressPage(InstallerPage):
         self.retranslate()
 
     def start_installation(self):
-        dirr = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(dirr, "zelix_config.json")
-        creds_path  = os.path.join(dirr, "zelix_creds.json")
+        config_path = "/tmp/zelix_config.json"
+        creds_path  = "/tmp/zelix_creds.json"
 
         self.log_console.clear()
         self.log_console.appendPlainText(get_text("install_log_header"))
@@ -1469,7 +1466,7 @@ umount /mnt/zelix_target
 echo "İşlem başarıyla tamamlandı!"
 """
 
-        script_path = os.path.join(dirr, "zelix_post_install.sh")
+        script_path = "/tmp/zelix_post_install.sh"
         try:
             with open(script_path, "w") as f:
                 f.write(script_content)
