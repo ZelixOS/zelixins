@@ -1,9 +1,0 @@
-#!/usr/bin/env xdg-open
-[Desktop Entry]
-Type=Application
-Name=ZelixOS Updater
-Comment=ZelixOS Updater Program
-Exec=python /usr/share/zelix-updater/main.py
-Icon=/usr/share/zelix/zelix-icon.png
-Terminal=false
-Categories=System;Installer;
