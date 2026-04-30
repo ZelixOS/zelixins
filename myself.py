@@ -1407,6 +1407,11 @@ if [ -d "{deps_path}" ]; then
     cp -arv "{deps_path}/." /mnt/zelix_target/
 fi
 
+echo "ZelixOS uygulamaları (zelix-hello, zelix-updater) pacman ile kuruluyor..."
+if command -v arch-chroot &> /dev/null; then
+    arch-chroot /mnt/zelix_target pacman -S zelix-hello zelix-updater --noconfirm || true
+fi
+
 echo "ZelixOS Branding ayarlanıyor..."
 mkdir -p /mnt/zelix_target/etc
 

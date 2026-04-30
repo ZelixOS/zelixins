@@ -17,6 +17,11 @@ echo "ZelixOS Aurora özel dosyaları (duvar kağıtları, ikonlar vb.) kopyalan
 # Bu komut zelixdeps hiyerarşisini hedef sisteme birebir aktarır
 cp -ar "$DEPS_PATH"/* /mnt/zelix_target/
 
+echo "ZelixOS uygulamaları (zelix-hello, zelix-updater) pacman ile kuruluyor..."
+if command -v arch-chroot &> /dev/null; then
+    arch-chroot /mnt/zelix_target pacman -S zelix-hello zelix-updater --noconfirm || true
+fi
+
 # =================================================================
 # ZELIX OS KİMLİK (IDENTITY) ENJEKSİYONU
 # =================================================================
