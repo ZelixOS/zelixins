@@ -1,0 +1,9 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Type=Application
+Name=ZelixOS Hello
+Comment=ZelixOS Hello Program
+Exec=python /usr/share/zelix-hello/main.py
+Icon=/usr/share/zelix/zelix-icon.png
+Terminal=false
+Categories=System;Installer;

@@ -1258,6 +1258,67 @@ class SummaryPage(InstallerPage):
 
 
 # ─────────────────────────────────────────────
+#  Slideshow Widget
+# ─────────────────────────────────────────────
+
+class SlideshowWidget(QLabel):
+    """A widget that displays a cycling slideshow of images."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setStyleSheet("border: 2px solid #31363b; border-radius: 10px; background: #000;")
+        # Set a reasonable size for the slideshow area
+        self.setFixedSize(700, 380)
+        
+        self.slides = []
+        self.current_slide = 0
+        
+        # Determine slides path
+        # 1. Check relative to script (for dev/live)
+        dirr = os.path.dirname(os.path.abspath(__file__))
+        self.slides_dir = os.path.join(dirr, "slides")
+        
+        # 2. Check system path if relative not found
+        if not os.path.exists(self.slides_dir):
+            self.slides_dir = "/usr/share/zelixins/slides"
+            
+        self.load_slides()
+        
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.next_slide)
+        self.timer.start(8000) # 8 seconds per slide
+        
+        self.show_slide()
+
+    def load_slides(self):
+        if os.path.exists(self.slides_dir):
+            try:
+                files = sorted([f for f in os.listdir(self.slides_dir) if f.lower().endswith((".png", ".jpg", ".jpeg"))])
+                self.slides = [os.path.join(self.slides_dir, f) for f in files]
+            except Exception:
+                self.slides = []
+
+    def next_slide(self):
+        if not self.slides:
+            return
+        self.current_slide = (self.current_slide + 1) % len(self.slides)
+        self.show_slide()
+
+    def show_slide(self):
+        if not self.slides:
+            self.setText("ZelixOS Aurora")
+            self.setStyleSheet("font-size: 24px; color: #9b59b6; border: 2px solid #31363b; border-radius: 10px; background: #1b1e20;")
+            return
+        
+        pixmap = QPixmap(self.slides[self.current_slide])
+        if not pixmap.isNull():
+            scaled_pixmap = pixmap.scaled(self.width() - 4, self.height() - 4, 
+                                         Qt.AspectRatioMode.KeepAspectRatioByExpanding, 
+                                         Qt.TransformationMode.SmoothTransformation)
+            self.setPixmap(scaled_pixmap)
+
+
+# ─────────────────────────────────────────────
 #  Install Progress Page
 # ─────────────────────────────────────────────
 
@@ -1269,12 +1330,18 @@ class InstallProgressPage(InstallerPage):
 
         self.title_label = QLabel()
         self.title_label.setStyleSheet(
-            "font-size: 28px; font-weight: bold; color: #f39c12; margin-bottom: 10px;"
+            "font-size: 28px; font-weight: bold; color: #f39c12; margin-bottom: 5px;"
         )
         self.main_layout.addWidget(self.title_label)
 
+        # Slideshow
+        self.slideshow = SlideshowWidget(self)
+        self.main_layout.addWidget(self.slideshow, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.main_layout.addSpacing(10)
+
         self.log_console = QPlainTextEdit()
         self.log_console.setReadOnly(True)
+        self.log_console.setFixedHeight(180) # Shrink terminal
         self.log_console.setStyleSheet("""
             background-color: #0c0c0c;
             color: #00ff00;
@@ -1282,6 +1349,7 @@ class InstallProgressPage(InstallerPage):
             font-size: 13px;
             padding: 10px;
             border-radius: 5px;
+            border: 1px solid #31363b;
         """)
         self.main_layout.addWidget(self.log_console)
 
