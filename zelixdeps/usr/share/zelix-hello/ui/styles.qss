@@ -1,0 +1,177 @@
+/* Global Reset and Colors */
+* {
+    color: #F0F0F0;
+    font-family: 'Segoe UI', 'Inter', sans-serif;
+}
+
+QMainWindow {
+    background-color: #161920;
+}
+
+/* Headings */
+QLabel#dashboard_title {
+    font-size: 26px;
+    font-weight: bold;
+    color: #FFFFFF;
+}
+
+QLabel#dashboard_subtitle {
+    font-size: 14px;
+    color: #B0B5C0;
+    padding-bottom: 10px;
+}
+
+QLabel#grid_header {
+    font-size: 14px;
+    font-weight: bold;
+    color: #1A4D8F; /* Navy Blue Highlight */
+    margin-bottom: 5px;
+    text-transform: uppercase;
+}
+
+QLabel#footer_text {
+    font-size: 13px;
+    color: #B0B5C0;
+}
+
+QLabel#title_label {
+    font-size: 22px;
+    font-weight: bold;
+    color: #FFFFFF;
+    margin-bottom: 10px;
+    border-bottom: 2px solid #1A4D8F;
+    padding-bottom: 5px;
+}
+
+/* Buttons */
+QPushButton {
+    background-color: #232731;
+    color: #E0E5F0;
+    border: 1px solid #303542;
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QPushButton:hover {
+    background-color: #2A2E39;
+    border: 1px solid #404655;
+    color: #FFFFFF;
+}
+
+QPushButton:pressed {
+    background-color: #1A4D8F;
+    border: 1px solid #143A6E;
+    color: #FFFFFF;
+}
+
+QPushButton#launch_installer_btn {
+    background-color: #1A4D8F; /* Navy Blue Highlight */
+    color: #FFFFFF;
+    border: 1px solid #143A6E;
+    width: 220px;
+    margin-top: 10px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+QPushButton#launch_installer_btn:hover {
+    background-color: #143A6E;
+}
+
+QPushButton#social_btn {
+    border-radius: 14px;
+    background-color: #232731;
+    border: 1px solid #303542;
+    padding: 6px;
+    min-width: 28px;
+    min-height: 28px;
+}
+QPushButton#social_btn:hover {
+    background-color: #1A4D8F;
+    border: 1px solid #1A4D8F;
+}
+
+QPushButton#toggle_btn {
+    background-color: #232731;
+    border: 1px solid #303542;
+    border-radius: 12px;
+    padding: 4px 16px;
+    color: #B0B5C0;
+}
+QPushButton#toggle_btn:checked {
+    background-color: #1A4D8F; /* Navy Blue Highlight */
+    color: #FFFFFF;
+    border: 1px solid #143A6E;
+}
+
+/* ComboBox */
+QComboBox {
+    background-color: #232731;
+    border: 1px solid #303542;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #FFFFFF;
+}
+QComboBox::drop-down {
+    border: none;
+}
+QComboBox QAbstractItemView {
+    background-color: #232731;
+    border: 1px solid #303542;
+    selection-background-color: #1A4D8F;
+}
+
+/* Cards / GroupBoxes for sub-tabs */
+QGroupBox {
+    background-color: #1D212A;
+    border: 1px solid #2A2E39;
+    border-radius: 8px;
+    margin-top: 20px;
+    padding-top: 20px;
+    font-weight: bold;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    left: 10px;
+    color: #1A4D8F; /* Navy Blue */
+    font-size: 14px;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    border: none;
+    background: #161920;
+    width: 10px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background: #303542;
+    min-height: 20px;
+    border-radius: 5px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #1A4D8F;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+/* Sub-tab back buttons */
+QPushButton#back_btn {
+    background-color: transparent;
+    border: none;
+    font-size: 14px;
+    font-weight: bold;
+    color: #B0B5C0;
+    text-align: left;
+    padding: 5px 0px;
+}
+QPushButton#back_btn:hover {
+    color: #1A4D8F; /* Navy Blue */
+    background-color: transparent;
+}
