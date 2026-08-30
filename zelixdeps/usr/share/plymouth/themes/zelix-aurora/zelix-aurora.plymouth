@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Zelix Aurora
+Description=A modern frosted-glass boot splash for ZelixOS Aurora
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/zelix-aurora
+ScriptFile=/usr/share/plymouth/themes/zelix-aurora/zelix-aurora.script

@@ -1,0 +1,72 @@
+# Zelix Aurora Plymouth Script
+
+# Screen dimensions
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+
+# Background
+bg_image = Image("background.png");
+resized_bg = bg_image.Scale(screen_width, screen_height);
+bg_sprite = Sprite(resized_bg);
+bg_sprite.SetPosition(0, 0, -100);
+
+# Dark Overlay
+overlay_image = Image.CreateRectangle(screen_width, screen_height);
+overlay_sprite = Sprite(overlay_image);
+overlay_sprite.SetPosition(0, 0, -50);
+overlay_sprite.SetOpacity(0.35);
+
+# Central Logo
+logo_image = Image("logo.png");
+# Scale logo if needed (e.g. 128x128)
+logo_scale = 128 / logo_image.GetWidth();
+scaled_logo = logo_image.Scale(128, 128);
+logo_sprite = Sprite(scaled_logo);
+logo_x = (screen_width - 128) / 2;
+logo_y = (screen_height - 128) / 2 - 20;
+logo_sprite.SetPosition(logo_x, logo_y, 10);
+logo_sprite.SetOpacity(1.0);
+
+# Text label
+status_sprite = Sprite();
+status_sprite.SetPosition(screen_width / 2, logo_y + 160, 20);
+
+# Refresh / Animation callback
+progress_angle = 0.0;
+fun refresh_callback() {
+    progress_angle += 0.04;
+    opacity_pulse = 0.85 + 0.15 * Math.Sin(progress_angle * 3);
+    logo_sprite.SetOpacity(opacity_pulse);
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# Boot Progress Callback
+fun progress_callback(duration, progress) {
+    # Optional progress tracking
+}
+Plymouth.SetBootProgressFunction(progress_callback);
+
+# Password prompt support (LUKS/disk encryption)
+prompt_sprite = Sprite();
+fun display_password_callback(prompt, bullets) {
+    prompt_image = Image.Text(prompt, 1.0, 1.0, 1.0);
+    prompt_sprite.SetImage(prompt_image);
+    prompt_sprite.SetPosition((screen_width - prompt_image.GetWidth()) / 2, logo_y + 160, 30);
+}
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+# Message handler
+fun message_callback(text) {
+    msg_image = Image.Text(text, 0.7, 0.75, 0.85);
+    status_sprite.SetImage(msg_image);
+    status_sprite.SetPosition((screen_width - msg_image.GetWidth()) / 2, logo_y + 160, 20);
+}
+Plymouth.SetMessageFunction(message_callback);
+
+# Quit callback
+fun quit_callback() {
+    logo_sprite.SetOpacity(0.0);
+    bg_sprite.SetOpacity(0.0);
+}
+Plymouth.SetQuitFunction(quit_callback);
