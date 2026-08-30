@@ -253,14 +253,25 @@ class DashboardTab(QWidget):
 
     def open_readme(self):
         app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        readme_path = os.path.join(app_dir, "readme.txt")
+        current_lang = Translator.get_language().lower()
         
-        if not os.path.exists(readme_path):
-            system_path = "/usr/share/zelix-hello/readme.txt"
-            if os.path.exists(system_path):
-                readme_path = system_path
+        if "turkish" in current_lang:
+            filenames = ["readme_tr.txt", "readme.txt"]
+        else:
+            filenames = ["readme_en.txt", "readme.txt"]
+            
+        readme_path = None
+        for fn in filenames:
+            local_candidate = os.path.join(app_dir, fn)
+            if os.path.exists(local_candidate):
+                readme_path = local_candidate
+                break
+            system_candidate = os.path.join("/usr/share/zelix-hello", fn)
+            if os.path.exists(system_candidate):
+                readme_path = system_candidate
+                break
                 
-        if os.path.exists(readme_path):
+        if readme_path and os.path.exists(readme_path):
             QDesktopServices.openUrl(QUrl.fromLocalFile(readme_path))
         else:
             QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS/blob/main/README.md"))

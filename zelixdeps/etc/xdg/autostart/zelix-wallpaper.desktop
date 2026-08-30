@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ZelixOS Desktop Theme & Wallpaper
+Comment=Applies ZelixOS Aurora theme and wallpaper on login
+Exec=sh -c "sleep 1; plasma-apply-colorscheme BreezeDark 2>/dev/null; plasma-apply-wallpaperimage '/usr/share/wallpapers/Zelix/ZelixOS Aurora.png' 2>/dev/null || true"
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+Terminal=false

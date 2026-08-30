@@ -1,0 +1,89 @@
+#!/bin/bash
+set -x
+
+# 1. Clean up live ISO artifacts that prevent Plymouth from working
+rm -f /etc/mkinitcpio.conf.d/archiso.conf /etc/mkinitcpio.conf.d/archiso* 2>/dev/null || true
+
+# 2. Configure /etc/mkinitcpio.conf with plymouth hook
+cat << 'MKE' > /etc/mkinitcpio.conf
+MODULES=()
+BINARIES=()
+FILES=()
+HOOKS=(base udev plymouth autodetect modconf kms keyboard keymap consolefont block filesystems fsck)
+COMPRESSION="zstd"
+MKE
+
+# 3. Configure Plymouth
+mkdir -p /etc/plymouth
+cat << 'PLE' > /etc/plymouth/plymouthd.conf
+[Daemon]
+Theme=zelix-aurora
+ShowDelay=0
+DeviceTimeout=8
+PLE
+
+# Rebuild initramfs with Plymouth
+plymouth-set-default-theme -R zelix-aurora 2>/dev/null || mkinitcpio -P || true
+
+# 4. Configure GRUB theme & quiet splash
+mkdir -p /boot/grub/themes/zelix-aurora /usr/share/grub/themes/zelix-aurora
+cp -r /usr/share/grub/themes/zelix-aurora/* /boot/grub/themes/zelix-aurora/ 2>/dev/null || true
+cp -r /boot/grub/themes/zelix-aurora/* /usr/share/grub/themes/zelix-aurora/ 2>/dev/null || true
+
+cat << 'GRE' > /etc/default/grub
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="ZelixOS"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3"
+GRUB_CMDLINE_LINUX=""
+GRUB_PRELOAD_MODULES="part_gpt part_msdos"
+GRUB_TIMEOUT_STYLE=menu
+GRUB_TERMINAL_INPUT="console"
+GRUB_TERMINAL_OUTPUT="gfxterm"
+GRUB_GFXMODE="auto"
+GRUB_GFXPAYLOAD_LINUX="keep"
+GRUB_DISABLE_RECOVERY=true
+GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"
+GRE
+
+grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+
+# 5. Configure SDDM Theme
+mkdir -p /etc/sddm.conf.d
+cat << 'SDE1' > /etc/sddm.conf
+[Theme]
+Current=zelix-aurora
+CursorTheme=breeze_cursors
+SDE1
+
+cat << 'SDE2' > /etc/sddm.conf.d/zelix.conf
+[Theme]
+Current=zelix-aurora
+CursorTheme=breeze_cursors
+SDE2
+
+cat << 'SDE3' > /etc/sddm.conf.d/kde_settings.conf
+[Theme]
+Current=zelix-aurora
+CursorTheme=breeze_cursors
+SDE3
+
+systemctl enable sddm.service 2>/dev/null || true
+systemctl set-default graphical.target 2>/dev/null || true
+
+# 6. Apply KDE dark theme & skel configs to all users
+for user_home in /home/*; do
+    if [ -d "$user_home" ]; then
+        user_name=$(basename "$user_home")
+        mkdir -p "$user_home/.config"
+        cp -rn /etc/skel/.config/* "$user_home/.config/" 2>/dev/null || true
+        cp -f /etc/skel/.config/kdeglobals "$user_home/.config/kdeglobals" 2>/dev/null || true
+        chown -R "$user_name:$user_name" "$user_home" 2>/dev/null || true
+    fi
+done
+
+# 7. Ensure zelix CLI is executable
+chmod +x /usr/local/bin/zelix 2>/dev/null || true
+
+sync
+exit 0
