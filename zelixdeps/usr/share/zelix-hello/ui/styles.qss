@@ -81,16 +81,18 @@ QPushButton#launch_installer_btn:hover {
 }
 
 QPushButton#social_btn {
-    border-radius: 14px;
+    border-radius: 18px;
     background-color: #232731;
     border: 1px solid #303542;
     padding: 6px;
-    min-width: 28px;
-    min-height: 28px;
+    min-width: 36px;
+    min-height: 36px;
+    max-width: 36px;
+    max-height: 36px;
 }
 QPushButton#social_btn:hover {
     background-color: #1A4D8F;
-    border: 1px solid #1A4D8F;
+    border: 1px solid #4A90E2;
 }
 
 QPushButton#toggle_btn {

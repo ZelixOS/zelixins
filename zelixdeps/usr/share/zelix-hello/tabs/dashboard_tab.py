@@ -4,9 +4,19 @@ import subprocess
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, 
                              QPushButton, QGridLayout, QComboBox, QSpacerItem, 
                              QSizePolicy, QDialog, QTableWidget, QTableWidgetItem, QHeaderView)
-from PyQt6.QtCore import Qt, QUrl
-from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtCore import Qt, QUrl, QSize
+from PyQt6.QtGui import QDesktopServices, QIcon
 from utils.translations import Translator
+
+def get_asset_icon(name):
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    local_path = os.path.join(base_dir, "assets", "icons", name)
+    if os.path.exists(local_path):
+        return QIcon(local_path)
+    system_path = os.path.join("/usr/share/zelix-hello/assets/icons", name)
+    if os.path.exists(system_path):
+        return QIcon(system_path)
+    return QIcon()
 
 class ShortcutsDialog(QDialog):
     def __init__(self, parent=None):
@@ -173,12 +183,21 @@ class DashboardTab(QWidget):
         
         # Social Icons
         social_layout = QHBoxLayout()
-        btn_tg = QPushButton("TG")
-        btn_dc = QPushButton("DC")
-        btn_gh = QPushButton("GH")
+        btn_tg = QPushButton()
+        btn_dc = QPushButton()
+        btn_gh = QPushButton()
         btn_tg.setObjectName("social_btn")
         btn_dc.setObjectName("social_btn")
         btn_gh.setObjectName("social_btn")
+        btn_tg.setIcon(get_asset_icon("telegram.svg"))
+        btn_dc.setIcon(get_asset_icon("discord.svg"))
+        btn_gh.setIcon(get_asset_icon("github.svg"))
+        btn_tg.setIconSize(QSize(20, 20))
+        btn_dc.setIconSize(QSize(20, 20))
+        btn_gh.setIconSize(QSize(20, 20))
+        btn_tg.setToolTip("Telegram")
+        btn_dc.setToolTip("Discord")
+        btn_gh.setToolTip("GitHub")
         social_layout.addWidget(btn_tg)
         social_layout.addWidget(btn_dc)
         social_layout.addWidget(btn_gh)

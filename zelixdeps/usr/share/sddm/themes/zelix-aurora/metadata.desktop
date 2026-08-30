@@ -1,0 +1,9 @@
+[SddmGreeterTheme]
+Name=Zelix Aurora
+Description=A sleek, modern frosted-glass login theme for ZelixOS Aurora
+Author=ZelixOS Developers
+Copyright=(c) 2026 ZelixOS
+ConfigFile=theme.conf
+Type=sddm-theme
+Version=1.0
+MainScript=Main.qml
