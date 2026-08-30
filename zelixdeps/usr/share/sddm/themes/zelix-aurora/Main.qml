@@ -1,6 +1,4 @@
 import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
 import SddmComponents 2.0
 
 Rectangle {
@@ -9,14 +7,17 @@ Rectangle {
     height: 1080
     color: "#12151D"
 
-    property string bgSource: config.background || "/usr/share/wallpapers/Zelix/ZelixOS Aurora.png"
-    property string logoSource: config.logo || "/usr/share/zelix/zelix-icon.png"
+    property string bgSource: config.background || "background.png"
+    property string logoSource: config.logo || "logo.png"
     property color accentCol: config.accentColor || "#1A4D8F"
     property color accentHov: config.accentHover || "#4A90E2"
-    property color cardBg: config.cardBackground || "#12151D"
-    property real cardOp: Number(config.cardOpacity) || 0.85
+    property color cardBg: config.cardBackground || "#161922"
+    property real cardOp: Number(config.cardOpacity) || 0.88
     property color textPrimary: config.textColor || "#FFFFFF"
     property color textSecondary: config.textSecondary || "#B0B5C0"
+    property int sessionIndex: sessionModel.lastIndex >= 0 ? sessionModel.lastIndex : 0
+
+    TextConstants { id: textConstants }
 
     // Background Image
     Image {
@@ -26,20 +27,26 @@ Rectangle {
         fillMode: Image.PreserveAspectCrop
         smooth: true
         asynchronous: true
+
+        onStatusChanged: {
+            if (status == Image.Error && source != "background.png") {
+                source = "background.png"
+            }
+        }
     }
 
-    // Subtle dark overlay to enhance contrast
+    // Subtle dark overlay to enhance text readability
     Rectangle {
         anchors.fill: parent
         color: "#000000"
-        opacity: 0.25
+        opacity: 0.3
     }
 
-    // Top Clock & Date Container
+    // Top Clock & Date
     Column {
         id: clockContainer
         anchors.top: parent.top
-        anchors.topMargin: root.height * 0.08
+        anchors.topMargin: Math.max(40, root.height * 0.08)
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 6
 
@@ -49,10 +56,8 @@ Rectangle {
             text: Qt.formatTime(new Date(), config.clockFormat || "HH:mm")
             color: root.textPrimary
             font.pixelSize: 64
-            font.weight: Font.DemiBold
+            font.bold: true
             font.family: "Noto Sans"
-            style: Text.DropShadow
-            styleColor: "#66000000"
         }
 
         Text {
@@ -62,8 +67,6 @@ Rectangle {
             color: root.textSecondary
             font.pixelSize: 18
             font.family: "Noto Sans"
-            style: Text.DropShadow
-            styleColor: "#66000000"
         }
     }
 
@@ -81,29 +84,19 @@ Rectangle {
     Rectangle {
         id: loginCard
         width: 380
-        height: 420
+        height: 400
         anchors.centerIn: parent
         radius: 16
         color: root.cardBg
         opacity: root.cardOp
-        border.color: Qt.rgba(1, 1, 1, 0.12)
+        border.color: Qt.rgba(1, 1, 1, 0.15)
         border.width: 1
 
-        // Drop shadow effect simulation
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: -1
-            radius: parent.radius + 1
-            color: "transparent"
-            border.color: Qt.rgba(0, 0, 0, 0.3)
-            border.width: 1
-            z: -1
-        }
-
         Column {
+            id: cardContent
             anchors.fill: parent
-            anchors.margins: 30
-            spacing: 20
+            anchors.margins: 28
+            spacing: 16
 
             // User Avatar / Logo
             Item {
@@ -125,116 +118,130 @@ Rectangle {
                         source: root.logoSource
                         fillMode: Image.PreserveAspectFit
                         smooth: true
+                        onStatusChanged: {
+                            if (status == Image.Error) {
+                                source = ""
+                            }
+                        }
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "👤"
+                        font.pixelSize: 28
+                        visible: userAvatar.status != Image.Ready
                     }
                 }
             }
 
-            // User Name or Selection
-            Item {
+            // User Name Box
+            Rectangle {
                 width: parent.width
-                height: 38
+                height: 40
+                color: "#1E222D"
+                radius: 8
+                border.color: userNameInput.activeFocus ? root.accentCol : "#303542"
+                border.width: 1
 
-                ComboBox {
-                    id: userSelect
+                TextInput {
+                    id: userNameInput
                     anchors.fill: parent
-                    model: userModel
-                    textRole: "name"
-                    currentIndex: userModel.lastIndex >= 0 ? userModel.lastIndex : 0
-                    visible: userModel.count > 1
+                    anchors.margins: 8
+                    anchors.leftMargin: 12
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: root.textPrimary
+                    font.pixelSize: 14
+                    font.family: "Noto Sans"
+                    text: userModel.lastUser || "zelix"
+                    clip: true
 
-                    background: Rectangle {
-                        color: "#1E222D"
-                        radius: 8
-                        border.color: userSelect.activeFocus ? root.accentCol : "#303542"
-                        border.width: 1
-                    }
-
-                    contentItem: Text {
-                        leftPadding: 12
-                        text: userSelect.displayText
-                        color: root.textPrimary
-                        font.pixelSize: 14
-                        font.family: "Noto Sans"
-                        verticalAlignment: Text.AlignVCenter
-                    }
+                    KeyNavigation.tab: passwordInput
+                    Keys.onReturnPressed: sddm.login(userNameInput.text, passwordInput.text, root.sessionIndex)
                 }
 
                 Text {
-                    id: singleUserText
-                    anchors.fill: parent
-                    visible: userModel.count <= 1
-                    text: userModel.lastUser || (userModel.count > 0 ? userModel.data(userModel.index(0, 0), Qt.DisplayRole) : "zelix")
-                    color: root.textPrimary
-                    font.pixelSize: 16
-                    font.weight: Font.Medium
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Kullanıcı Adı / Username"
+                    color: root.textSecondary
+                    font.pixelSize: 13
                     font.family: "Noto Sans"
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                    visible: !userNameInput.text && !userNameInput.activeFocus
                 }
             }
 
             // Password Field
-            Item {
+            Rectangle {
+                id: passBg
                 width: parent.width
-                height: 44
+                height: 40
+                color: "#1E222D"
+                radius: 8
+                border.color: passwordInput.activeFocus ? root.accentCol : "#303542"
+                border.width: 1
 
-                Rectangle {
-                    id: passBg
+                TextInput {
+                    id: passwordInput
                     anchors.fill: parent
-                    color: "#1E222D"
-                    radius: 8
-                    border.color: passwordInput.activeFocus ? root.accentCol : "#303542"
-                    border.width: 1
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 40
+                    anchors.topMargin: 8
+                    anchors.bottomMargin: 8
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: root.textPrimary
+                    font.pixelSize: 14
+                    font.family: "Noto Sans"
+                    echoMode: showPassToggle.checked ? TextInput.Normal : TextInput.Password
+                    clip: true
+                    focus: true
 
-                    TextField {
-                        id: passwordInput
-                        anchors.fill: parent
-                        anchors.leftMargin: 12
-                        anchors.rightMargin: 44
-                        echoMode: showPassBtn.checked ? TextInput.Normal : TextInput.Password
-                        placeholderText: "Parola / Password"
-                        placeholderTextColor: root.textSecondary
-                        color: root.textPrimary
-                        font.pixelSize: 14
-                        font.family: "Noto Sans"
-                        background: null
-                        focus: true
+                    KeyNavigation.backtab: userNameInput
+                    KeyNavigation.tab: loginBtn
+                    Keys.onReturnPressed: sddm.login(userNameInput.text, passwordInput.text, root.sessionIndex)
+                    onTextChanged: errorMessage.visible = false
+                }
 
-                        onAccepted: loginAction()
-                        onTextChanged: errorMessage.visible = false
+                Text {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Parola / Password"
+                    color: root.textSecondary
+                    font.pixelSize: 13
+                    font.family: "Noto Sans"
+                    visible: !passwordInput.text && !passwordInput.activeFocus
+                }
+
+                // Password Show/Hide Toggle
+                Rectangle {
+                    id: showPassToggle
+                    width: 28
+                    height: 28
+                    radius: 6
+                    anchors.right: parent.right
+                    anchors.rightMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: mouseShowPass.containsMouse ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
+                    property bool checked: false
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: showPassToggle.checked ? "👁" : "🔒"
+                        font.pixelSize: 13
                     }
 
-                    // Eye Icon Toggle
-                    Rectangle {
-                        id: showPassBtn
-                        width: 32
-                        height: 32
-                        radius: 6
-                        anchors.right: parent.right
-                        anchors.rightMargin: 6
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: mouseShowPass.containsMouse ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
-                        property bool checked: false
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: showPassBtn.checked ? "👁" : "🔒"
-                            font.pixelSize: 14
-                            color: root.textSecondary
-                        }
-
-                        MouseArea {
-                            id: mouseShowPass
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: showPassBtn.checked = !showPassBtn.checked
-                        }
+                    MouseArea {
+                        id: mouseShowPass
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: showPassToggle.checked = !showPassToggle.checked
                     }
                 }
             }
 
-            // Error Message
+            // Error Message Display
             Text {
                 id: errorMessage
                 width: parent.width
@@ -249,7 +256,7 @@ Rectangle {
 
             // Login Button
             Rectangle {
-                id: loginButton
+                id: loginBtn
                 width: parent.width
                 height: 42
                 radius: 8
@@ -260,7 +267,7 @@ Rectangle {
                     text: "Giriş Yap / Login →"
                     color: "#FFFFFF"
                     font.pixelSize: 14
-                    font.weight: Font.Bold
+                    font.bold: true
                     font.family: "Noto Sans"
                 }
 
@@ -269,13 +276,13 @@ Rectangle {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: loginAction()
+                    onClicked: sddm.login(userNameInput.text, passwordInput.text, root.sessionIndex)
                 }
             }
         }
     }
 
-    // Bottom Bar: Session & Power Options
+    // Bottom Bar: Session Info & Power Options
     Item {
         id: bottomBar
         anchors.bottom: parent.bottom
@@ -284,35 +291,24 @@ Rectangle {
         anchors.margins: 24
         height: 48
 
-        // Left: Session selector
-        Row {
+        // Left: Session indicator
+        Rectangle {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 12
+            height: 36
+            width: sessionText.implicitWidth + 24
+            color: Qt.rgba(0.08, 0.1, 0.14, 0.85)
+            radius: 8
+            border.color: "#303542"
+            border.width: 1
 
-            ComboBox {
-                id: sessionSelect
-                width: 180
-                height: 36
-                model: sessionModel
-                textRole: "name"
-                currentIndex: sessionModel.lastIndex >= 0 ? sessionModel.lastIndex : 0
-
-                background: Rectangle {
-                    color: Qt.rgba(0.07, 0.08, 0.11, 0.85)
-                    radius: 8
-                    border.color: "#303542"
-                    border.width: 1
-                }
-
-                contentItem: Text {
-                    leftPadding: 10
-                    text: sessionSelect.displayText
-                    color: root.textSecondary
-                    font.pixelSize: 12
-                    font.family: "Noto Sans"
-                    verticalAlignment: Text.AlignVCenter
-                }
+            Text {
+                id: sessionText
+                anchors.centerIn: parent
+                text: "🖥 " + (sessionModel.lastIndex >= 0 && sessionModel.count > sessionModel.lastIndex ? sessionModel.data(sessionModel.index(sessionModel.lastIndex, 0), Qt.DisplayRole) : "Plasma (Wayland)")
+                color: root.textSecondary
+                font.pixelSize: 12
+                font.family: "Noto Sans"
             }
         }
 
@@ -324,10 +320,10 @@ Rectangle {
 
             // Suspend
             Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: mouseSuspend.containsMouse ? root.accentCol : Qt.rgba(0.07, 0.08, 0.11, 0.85)
+                width: 38
+                height: 38
+                radius: 19
+                color: mouseSuspend.containsMouse ? root.accentCol : Qt.rgba(0.08, 0.1, 0.14, 0.85)
                 border.color: "#303542"
                 border.width: 1
 
@@ -336,9 +332,6 @@ Rectangle {
                     text: "🌙"
                     font.pixelSize: 14
                 }
-
-                ToolTip.visible: mouseSuspend.containsMouse
-                ToolTip.text: "Uyut / Suspend"
 
                 MouseArea {
                     id: mouseSuspend
@@ -351,10 +344,10 @@ Rectangle {
 
             // Reboot
             Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: mouseReboot.containsMouse ? root.accentCol : Qt.rgba(0.07, 0.08, 0.11, 0.85)
+                width: 38
+                height: 38
+                radius: 19
+                color: mouseReboot.containsMouse ? root.accentCol : Qt.rgba(0.08, 0.1, 0.14, 0.85)
                 border.color: "#303542"
                 border.width: 1
 
@@ -363,9 +356,6 @@ Rectangle {
                     text: "🔄"
                     font.pixelSize: 14
                 }
-
-                ToolTip.visible: mouseReboot.containsMouse
-                ToolTip.text: "Yeniden Başlat / Reboot"
 
                 MouseArea {
                     id: mouseReboot
@@ -378,10 +368,10 @@ Rectangle {
 
             // Poweroff
             Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: mousePower.containsMouse ? "#E53935" : Qt.rgba(0.07, 0.08, 0.11, 0.85)
+                width: 38
+                height: 38
+                radius: 19
+                color: mousePower.containsMouse ? "#E53935" : Qt.rgba(0.08, 0.1, 0.14, 0.85)
                 border.color: "#303542"
                 border.width: 1
 
@@ -391,9 +381,6 @@ Rectangle {
                     color: mousePower.containsMouse ? "#FFFFFF" : root.textSecondary
                     font.pixelSize: 15
                 }
-
-                ToolTip.visible: mousePower.containsMouse
-                ToolTip.text: "Kapat / Shutdown"
 
                 MouseArea {
                     id: mousePower
@@ -406,22 +393,17 @@ Rectangle {
         }
     }
 
-    // Login action function
-    function loginAction() {
-        var user = userModel.count > 1 ? userSelect.currentText : (singleUserText.text || "zelix")
-        var pass = passwordInput.text
-        var sess = sessionSelect.currentIndex
-        sddm.login(user, pass, sess)
-    }
-
     // SDDM Event Handlers
     Connections {
         target: sddm
+
         function onLoginFailed() {
+            errorMessage.text = "Giriş başarısız. Lütfen tekrar deneyin."
             errorMessage.visible = true
-            passwordInput.selectAll()
+            passwordInput.text = ""
             passwordInput.focus = true
         }
+
         function onLoginSucceeded() {
             errorMessage.visible = false
         }
