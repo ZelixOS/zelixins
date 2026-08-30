@@ -1938,11 +1938,16 @@ if [ "$BOOT_MOUNTED" == "1" ]; then
     
     # 2. GRUB
     if [ -f "/mnt/zelix_target/etc/default/grub" ]; then
-        echo "GRUB yapılandırması güncelleniyor..."
+        echo "GRUB yapılandırması ve Zelix Aurora teması güncelleniyor..."
         sed -i 's/GRUB_DISTRIBUTOR="Arch"/GRUB_DISTRIBUTOR="ZelixOS"/g' /mnt/zelix_target/etc/default/grub
+        sed -i 's/^#*GRUB_THEME=.*/GRUB_THEME="\/usr\/share\/grub\/themes\/zelix-aurora\/theme.txt"/' /mnt/zelix_target/etc/default/grub
+        if ! grep -q "GRUB_THEME" /mnt/zelix_target/etc/default/grub; then
+            echo 'GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"' >> /mnt/zelix_target/etc/default/grub
+        fi
+        sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=".*"/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3"/' /mnt/zelix_target/etc/default/grub
         # Run grub-mkconfig inside chroot
         if command -v arch-chroot &> /dev/null; then
-            arch-chroot /mnt/zelix_target grub-mkconfig -o /boot/grub/grub.cfg || true
+            arch-chroot /mnt/zelix_target grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
         fi
     fi
 fi
@@ -1971,6 +1976,13 @@ EOF
     else
         echo "-> ZelixRepo zaten mevcut."
     fi
+fi
+
+# Enable SDDM & Plymouth
+if command -v arch-chroot &>/dev/null; then
+    echo "SDDM ve Plymouth yapılandırılıyor..."
+    arch-chroot /mnt/zelix_target systemctl enable sddm 2>/dev/null || true
+    arch-chroot /mnt/zelix_target plymouth-set-default-theme -R zelix-aurora 2>/dev/null || arch-chroot /mnt/zelix_target mkinitcpio -P 2>/dev/null || true
 fi
 
 echo "Senkronize ediliyor..."

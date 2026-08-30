@@ -48,7 +48,21 @@ DISTRIB_RELEASE=rolling
 DISTRIB_DESCRIPTION="ZelixOS Aurora"
 EOF
 
+# 4. SDDM, Plymouth ve GRUB Yapılandırmalarını Uygula
+echo "Görsel temalar (SDDM, Plymouth, GRUB) uygulanıyor..."
+if command -v arch-chroot &>/dev/null; then
+    # Enable SDDM
+    arch-chroot /mnt/zelix_target systemctl enable sddm 2>/dev/null || true
+    # Build Plymouth initramfs
+    arch-chroot /mnt/zelix_target plymouth-set-default-theme -R zelix-aurora 2>/dev/null || arch-chroot /mnt/zelix_target mkinitcpio -P 2>/dev/null || true
+    # Generate GRUB config
+    if [ -f "/mnt/zelix_target/boot/grub/grub.cfg" ] || [ -d "/mnt/zelix_target/boot/grub" ]; then
+        arch-chroot /mnt/zelix_target grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+    fi
+fi
+
 # İşlemler tamam, diski ayır
 echo "Sistem temizleniyor ve disk ayrılıyor..."
-umount /mnt/zelix_target
+sync
+umount /mnt/zelix_target 2>/dev/null || true
 echo "ZelixOS Aurora yapılandırması başarıyla tamamlandı!"

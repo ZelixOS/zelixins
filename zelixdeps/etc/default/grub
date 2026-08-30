@@ -1,0 +1,20 @@
+# GRUB boot loader configuration for ZelixOS
+
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="ZelixOS"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3"
+GRUB_CMDLINE_LINUX=""
+
+# Preload modules
+GRUB_PRELOAD_MODULES="part_gpt part_msdos"
+
+# Graphical terminal
+GRUB_TERMINAL_INPUT="console"
+GRUB_TERMINAL_OUTPUT="gfxterm"
+GRUB_GFXMODE="auto"
+GRUB_GFXPAYLOAD_LINUX="keep"
+
+# Theme
+GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"
+GRUB_DISABLE_RECOVERY=true
