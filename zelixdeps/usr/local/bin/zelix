@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+#
+# ZelixOS Management CLI (zelix)
+# Simple, fast, and unified system management tool for ZelixOS.
+#
+
+set -e
+
+# Colors
+C_RESET="\e[0m"
+C_BOLD="\e[1m"
+C_BLUE="\e[38;5;75m"
+C_CYAN="\e[38;5;80m"
+C_GREEN="\e[38;5;78m"
+C_YELLOW="\e[38;5;220m"
+C_RED="\e[38;5;203m"
+C_GRAY="\e[38;5;244m"
+
+print_banner() {
+    echo -e "${C_BLUE}${C_BOLD}"
+    cat << "BANNER"
+  ____      _ _       ___  ____  
+ |_  / ___ | (_)_  __/ _ \/ ___| 
+  / / / _ \| | \ \/ / | | \___ \ 
+ / /_|  __/| | |>  <| |_| |___) |
+/____|\___||_|_/_/\_\\___/|____/ 
+BANNER
+    echo -e "${C_CYAN}ZelixOS Control Center CLI${C_RESET} ${C_GRAY}(v1.0.0)${C_RESET}\n"
+}
+
+print_help() {
+    print_banner
+    echo -e "${C_BOLD}Kullanım / Usage:${C_RESET}"
+    echo -e "  zelix <komut/command> [seçenekler/options]\n"
+    echo -e "${C_BOLD}Komutlar / Commands:${C_RESET}"
+    echo -e "  ${C_GREEN}update, u${C_RESET}     Sistemi ve AUR paketlerini güncelle (System & AUR update)"
+    echo -e "  ${C_GREEN}mirrors, m${C_RESET}    En hızlı yansıları seç ve optimize et (Rate mirrors)"
+    echo -e "  ${C_GREEN}clean, c${C_RESET}      Önbellek ve gereksiz (orphan) paketleri temizle"
+    echo -e "  ${C_GREEN}flathub, f${C_RESET}    Flathub / Flatpak deposunu sisteme ekle"
+    echo -e "  ${C_GREEN}info, i${C_RESET}       Sistem ve donanım bilgilerini göster (fastfetch)"
+    echo -e "  ${C_GREEN}hello, h${C_RESET}      Zelix Hello karşılama uygulamasını başlat"
+    echo -e "  ${C_GREEN}help, -h${C_RESET}      Bu yardım menüsünü görüntüle\n"
+}
+
+do_update() {
+    print_banner
+    echo -e "${C_BLUE}==>${C_RESET} ${C_BOLD}Sistem güncelleniyor / Updating system...${C_RESET}"
+    if command -v yay &>/dev/null; then
+        yay -Syu
+    else
+        sudo pacman -Syu
+    fi
+
+    if command -v flatpak &>/dev/null; then
+        echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}Flatpak paketleri güncelleniyor / Updating Flatpaks...${C_RESET}"
+        flatpak update -y || true
+    fi
+    echo -e "\n${C_GREEN}✔ Güncelleme tamamlandı / Update complete!${C_RESET}"
+}
+
+do_mirrors() {
+    print_banner
+    echo -e "${C_BLUE}==>${C_RESET} ${C_BOLD}Yansılar test ediliyor ve optimize ediliyor...${C_RESET}"
+    if command -v rate-mirrors &>/dev/null; then
+        local country=""
+        for var in LANG LC_ADDRESS LC_ALL; do
+            val="${!var}"
+            if [[ -n "$val" && "$val" == *"_"* ]]; then
+                country=$(echo "$val" | cut -d'_' -f2 | cut -d'.' -f1 | tr '[:lower:]' '[:upper:]')
+                break
+            fi
+        done
+
+        if [[ -n "$country" && ${#country} -eq 2 ]]; then
+            echo -e "${C_CYAN}Konum algılandı / Detected country:${C_RESET} $country"
+            rate-mirrors --allow-root --entry-country "$country" arch | sudo tee /etc/pacman.d/mirrorlist > /dev/null
+        else
+            rate-mirrors --allow-root arch | sudo tee /etc/pacman.d/mirrorlist > /dev/null
+        fi
+        echo -e "${C_GREEN}✔ /etc/pacman.d/mirrorlist başarıyla güncellendi!${C_RESET}"
+    else
+        echo -e "${C_YELLOW}rate-mirrors bulunamadı. Kuruluyor...${C_RESET}"
+        sudo pacman -S --noconfirm rate-mirrors-bin || yay -S --noconfirm rate-mirrors-bin || sudo pacman -S --noconfirm reflector
+    fi
+}
+
+do_clean() {
+    print_banner
+    echo -e "${C_BLUE}==>${C_RESET} ${C_BOLD}Paket önbelleği temizleniyor...${C_RESET}"
+    sudo pacman -Sc --noconfirm
+
+    echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}Gereksiz (orphan) paketler taranıyor...${C_RESET}"
+    local orphans
+    orphans=$(pacman -Qdtq || true)
+    if [[ -n "$orphans" ]]; then
+        echo -e "${C_YELLOW}Silinecek paketler:${C_RESET} $orphans"
+        echo "$orphans" | sudo pacman -Rns - --noconfirm
+    else
+        echo -e "${C_GREEN}Gereksiz paket bulunamadı (No orphans found).${C_RESET}"
+    fi
+    echo -e "\n${C_GREEN}✔ Temizlik tamamlandı!${C_RESET}"
+}
+
+do_flathub() {
+    print_banner
+    echo -e "${C_BLUE}==>${C_RESET} ${C_BOLD}Flathub deposu yapılandırılıyor...${C_RESET}"
+    if ! command -v flatpak &>/dev/null; then
+        echo -e "${C_YELLOW}Flatpak paketi kuruluyor...${C_RESET}"
+        sudo pacman -S --noconfirm flatpak
+    fi
+    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+    echo -e "${C_GREEN}✔ Flathub deposu başarıyla etkinleştirildi!${C_RESET}"
+}
+
+do_info() {
+    if command -v fastfetch &>/dev/null; then
+        fastfetch
+    else
+        print_banner
+        echo -e "${C_BOLD}Sistem Özeti:${C_RESET}"
+        echo -e "  ${C_CYAN}İşletim Sistemi:${C_RESET} $(grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d'=' -f2 | tr -d '\"' || echo 'ZelixOS')"
+        echo -e "  ${C_CYAN}Çekirdek (Kernel):${C_RESET} $(uname -r)"
+        echo -e "  ${C_CYAN}Uptime:${C_RESET} $(uptime -p 2>/dev/null || uptime)"
+        echo -e "  ${C_CYAN}Masaüstü (DE):${C_RESET} ${XDG_CURRENT_DESKTOP:-KDE Plasma}"
+        echo -e "  ${C_CYAN}Bellek (RAM):${C_RESET} $(free -h | awk '/^Mem:/ {print $3 "/" $2}')"
+    fi
+}
+
+do_hello() {
+    if command -v zelix-hello &>/dev/null; then
+        zelix-hello &
+    elif [[ -f /usr/share/zelix-hello/main.py ]]; then
+        python /usr/share/zelix-hello/main.py &
+    else
+        echo -e "${C_RED}zelix-hello bulunamadı.${C_RESET}"
+    fi
+}
+
+case "${1:-help}" in
+    update|u)
+        do_update
+        ;;
+    mirrors|m)
+        do_mirrors
+        ;;
+    clean|c)
+        do_clean
+        ;;
+    flathub|flatpak|f)
+        do_flathub
+        ;;
+    info|i)
+        do_info
+        ;;
+    hello|h)
+        do_hello
+        ;;
+    help|-h|--help)
+        print_help
+        ;;
+    *)
+        echo -e "${C_RED}Bilinmeyen komut: $1${C_RESET}\n"
+        print_help
+        exit 1
+        ;;
+esac

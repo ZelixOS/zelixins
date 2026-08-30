@@ -21,8 +21,7 @@ class CommandRunner(QThread):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=1,
-                universal_newlines=True
+                bufsize=1
             )
             
             while True:

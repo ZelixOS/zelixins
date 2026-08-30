@@ -1,5 +1,7 @@
+import os
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QStackedWidget
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon
 
 from tabs.dashboard_tab import DashboardTab
 from tabs.apps_tab import AppsTab
@@ -12,6 +14,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Zelix Hello")
         self.setMinimumSize(900, 600)
         self.resize(1000, 700)
+        
+        icon_path = "/usr/share/zelix/zelix-icon.png"
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         
         self._init_ui()
         

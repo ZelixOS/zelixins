@@ -1,7 +1,7 @@
 /* Global Reset and Colors */
 * {
     color: #F0F0F0;
-    font-family: 'Segoe UI', 'Inter', sans-serif;
+    font-family: 'Noto Sans', 'Inter', 'Ubuntu', 'DejaVu Sans', sans-serif;
 }
 
 QMainWindow {

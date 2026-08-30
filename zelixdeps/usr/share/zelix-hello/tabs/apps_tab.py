@@ -9,6 +9,7 @@ class AppsTab(QWidget):
     def __init__(self, parent_window):
         super().__init__()
         self.parent_window = parent_window
+        self.category_widgets = []
         self._init_ui()
         Translator.add_listener(self)
         
@@ -39,49 +40,70 @@ class AppsTab(QWidget):
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.setSpacing(25)
         
-        self.categories = {
-            "Gaming": {
+        self.categories = [
+            {
+                "key": "cat_gaming",
                 "apps": [
                     ("RetroArch", "retroarch"),
                     ("Lutris", "lutris"),
                     ("ProtonTricks", "protontricks"),
                     ("MangoHud", "mangohud"),
-                    ("Wine", "wine")
+                    ("Wine", "wine"),
+                    ("Steam", "steam")
                 ],
                 "extra_deps": "gamemode gamescope wine-staging winetricks vulkan-radeon vulkan-intel vulkan-icd-loader"
             },
-            "Office": {
+            {
+                "key": "cat_office",
                 "apps": [
                     ("LibreOffice", "libreoffice-fresh"),
                     ("Okular", "okular"),
-                    ("Calligra", "calligra")
+                    ("Calligra", "calligra"),
+                    ("Thunderbird", "thunderbird")
                 ],
                 "extra_deps": ""
             },
-            "Editing": {
+            {
+                "key": "cat_editing",
                 "apps": [
                     ("Kdenlive", "kdenlive"),
                     ("OBS Studio", "obs-studio"),
                     ("GIMP", "gimp"),
-                    ("Blender", "blender")
+                    ("Blender", "blender"),
+                    ("VLC", "vlc"),
+                    ("Audacity", "audacity")
                 ],
                 "extra_deps": ""
             },
-            "Browsers & Comm": {
+            {
+                "key": "cat_browsers",
                 "apps": [
                     ("Firefox", "firefox"),
                     ("Chromium", "chromium"),
                     ("Falkon", "falkon"),
-                    ("Telegram", "telegram-desktop")
+                    ("Telegram", "telegram-desktop"),
+                    ("Discord", "discord"),
+                    ("Spotify", "spotify-launcher")
+                ],
+                "extra_deps": ""
+            },
+            {
+                "key": "cat_devtools",
+                "apps": [
+                    ("VS Code", "code"),
+                    ("Neovim", "neovim"),
+                    ("FileZilla", "filezilla"),
+                    ("VirtualBox", "virtualbox")
                 ],
                 "extra_deps": ""
             }
-        }
+        ]
         
         self.category_widgets = []
         
-        for cat_name, cat_data in self.categories.items():
-            group = QGroupBox(cat_name)
+        for cat_info in self.categories:
+            cat_key = cat_info["key"]
+            group = QGroupBox()
             grid = QGridLayout(group)
             grid.setSpacing(15)
             grid.setContentsMargins(20, 30, 20, 20)
@@ -90,8 +112,8 @@ class AppsTab(QWidget):
             btn_install_all = QPushButton()
             btn_install_all.setObjectName("primary_btn")
             
-            apps_list = cat_data["apps"]
-            extra_deps = cat_data["extra_deps"]
+            apps_list = cat_info["apps"]
+            extra_deps = cat_info["extra_deps"]
             
             all_pkgs = " ".join([pkg for _, pkg in apps_list])
             if extra_deps:
@@ -99,11 +121,12 @@ class AppsTab(QWidget):
                 
             btn_install_all.clicked.connect(lambda checked, pkgs=all_pkgs: self.install_app(pkgs))
             
-            # Save references to update text later
-            self.category_widgets.append({
+            cat_widget_entry = {
+                "key": cat_key,
+                "group": group,
                 "btn_install_all": btn_install_all,
                 "app_btns": []
-            })
+            }
             
             grid.addWidget(btn_install_all, 0, 0, 1, 3)
             
@@ -113,13 +136,14 @@ class AppsTab(QWidget):
                 btn.clicked.connect(lambda checked, pkg=pkg_name: self.install_app(pkg))
                 grid.addWidget(btn, row, col)
                 
-                self.category_widgets[-1]["app_btns"].append((btn, app_name))
+                cat_widget_entry["app_btns"].append((btn, app_name))
                 
                 col += 1
                 if col > 2:
                     col = 0
                     row += 1
                     
+            self.category_widgets.append(cat_widget_entry)
             layout.addWidget(group)
             
         scroll.setWidget(scroll_widget)
@@ -135,6 +159,7 @@ class AppsTab(QWidget):
         install_all_text = Translator.get("btn_install_all")
         
         for cat_data in self.category_widgets:
+            cat_data["group"].setTitle(Translator.get(cat_data["key"]))
             cat_data["btn_install_all"].setText(install_all_text)
             for btn, app_name in cat_data["app_btns"]:
                 btn.setText(f"{app_name} {install_text}")
@@ -145,7 +170,8 @@ class AppsTab(QWidget):
             ("konsole", ["konsole", "-e"]),
             ("gnome-terminal", ["gnome-terminal", "--"]),
             ("xfce4-terminal", ["xfce4-terminal", "-e"]),
-            ("kitty", ["kitty", "--"])
+            ("kitty", ["kitty", "--"]),
+            ("xterm", ["xterm", "-e"])
         ]
         
         selected_term = None

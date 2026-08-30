@@ -1,11 +1,68 @@
 import os
+import shutil
 import subprocess
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, 
                              QPushButton, QGridLayout, QComboBox, QSpacerItem, 
-                             QSizePolicy)
+                             QSizePolicy, QDialog, QTableWidget, QTableWidgetItem, QHeaderView)
 from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QDesktopServices
 from utils.translations import Translator
+
+class ShortcutsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(Translator.get("shortcuts_title"))
+        self.setMinimumSize(540, 440)
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setSpacing(15)
+
+        title = QLabel(Translator.get("shortcuts_title"))
+        title.setObjectName("title_label")
+        layout.addWidget(title)
+
+        desc = QLabel(Translator.get("shortcuts_desc"))
+        desc.setObjectName("dashboard_subtitle")
+        layout.addWidget(desc)
+
+        table = QTableWidget()
+        table.setColumnCount(2)
+        table.setHorizontalHeaderLabels(["Kısayol / Key", "Açıklama / Action"])
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+
+        shortcuts = [
+            ("Super (Win)", Translator.get("sc_app_launcher")),
+            ("Alt + Space / Alt + F2", Translator.get("sc_krunner")),
+            ("Ctrl + Alt + T", Translator.get("sc_terminal")),
+            ("Super + E", Translator.get("sc_file_manager")),
+            ("PrintScreen", Translator.get("sc_screenshot")),
+            ("Super + ← / → / ↑", Translator.get("sc_window_tiling")),
+            ("Ctrl + Alt + Del", Translator.get("sc_lock_logout")),
+        ]
+
+        table.setRowCount(len(shortcuts))
+        for row, (key, act) in enumerate(shortcuts):
+            key_item = QTableWidgetItem(f" {key} ")
+            key_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            act_item = QTableWidgetItem(f" {act} ")
+            table.setItem(row, 0, key_item)
+            table.setItem(row, 1, act_item)
+
+        layout.addWidget(table)
+
+        btn_close = QPushButton(Translator.get("btn_close"))
+        btn_close.setObjectName("launch_installer_btn")
+        btn_close.clicked.connect(self.accept)
+        layout.addWidget(btn_close)
+
 
 class DashboardTab(QWidget):
     def __init__(self, parent_window):
@@ -15,9 +72,9 @@ class DashboardTab(QWidget):
         Translator.add_listener(self)
         
     def _init_ui(self):
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(40, 40, 40, 20)
-        self.layout.setSpacing(10)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(40, 40, 40, 20)
+        self.main_layout.setSpacing(10)
         
         # Header
         header_layout = QVBoxLayout()
@@ -38,8 +95,8 @@ class DashboardTab(QWidget):
         header_layout.addSpacing(10)
         header_layout.addWidget(self.subtitle)
         
-        self.layout.addLayout(header_layout)
-        self.layout.addSpacing(30)
+        self.main_layout.addLayout(header_layout)
+        self.main_layout.addSpacing(30)
         
         # Grid section
         grid_layout = QGridLayout()
@@ -83,26 +140,21 @@ class DashboardTab(QWidget):
         grid_layout.addWidget(self.btn_system, 3, 1)
         grid_layout.addWidget(self.btn_donate, 3, 2)
         
-        self.layout.addLayout(grid_layout)
+        self.main_layout.addLayout(grid_layout)
+        self.main_layout.addSpacing(30)
         
-        self.layout.addSpacing(30)
+        # Shortcuts Section (Replaces old installer section)
+        shortcuts_layout = QVBoxLayout()
+        shortcuts_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # Installation section
-        install_layout = QVBoxLayout()
-        install_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_install = QLabel()
-        self.lbl_install.setObjectName("grid_header")
-        self.lbl_install.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.btn_shortcuts = QPushButton()
+        self.btn_shortcuts.setObjectName("launch_installer_btn")
+        self.btn_shortcuts.clicked.connect(self.show_shortcuts)
         
-        self.btn_install = QPushButton()
-        self.btn_install.setObjectName("launch_installer_btn")
-        self.btn_install.clicked.connect(self.launch_installer)
+        shortcuts_layout.addWidget(self.btn_shortcuts)
+        self.main_layout.addLayout(shortcuts_layout)
         
-        install_layout.addWidget(self.lbl_install)
-        install_layout.addWidget(self.btn_install)
-        self.layout.addLayout(install_layout)
-        
-        self.layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        self.main_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         
         # Footer
         footer_layout = QHBoxLayout()
@@ -147,34 +199,52 @@ class DashboardTab(QWidget):
         
         if os.path.exists(self.autostart_path) or os.path.exists(self.system_autostart_path):
             self.btn_autostart.setChecked(True)
-            self.btn_autostart.setText("ON")
+            self.btn_autostart.setText(Translator.get("toggle_on"))
         else:
             self.btn_autostart.setChecked(False)
-            self.btn_autostart.setText("OFF")
+            self.btn_autostart.setText(Translator.get("toggle_off"))
         
         footer_layout.addWidget(self.lbl_launch)
         footer_layout.addWidget(self.btn_autostart)
         
-        self.layout.addLayout(footer_layout)
+        self.main_layout.addLayout(footer_layout)
 
         # Connect actions
         self.btn_software.clicked.connect(lambda: self.parent_window.navigate_to(1))
         self.btn_system.clicked.connect(lambda: self.parent_window.navigate_to(2))
         
         # Connect URLs
-        self.btn_readme.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/lanierc/zelixos/blob/main/README.md")))
-        self.btn_wiki.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://zelixos.com/docs/docs.html")))
+        self.btn_readme.clicked.connect(self.open_readme)
+        self.btn_wiki.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://docs.zelixos.com")))
         self.btn_forum.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://forum.zelixos.org")))
-        self.btn_release_info.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/lanierc/zelixos/releases")))
-        self.btn_get_involved.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/lanierc/zelixos")))
-        self.btn_development.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/lanierc/zelixos")))
+        self.btn_release_info.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS/releases")))
+        self.btn_get_involved.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS")))
+        self.btn_development.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS")))
         self.btn_donate.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://zelixos.com/")))
         
         btn_tg.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://t.me/zelixos")))
         btn_dc.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://discord.gg/zelixos")))
-        btn_gh.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/lanierc/zelixos")))
+        btn_gh.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS")))
         
         self.retranslate_ui()
+
+    def show_shortcuts(self):
+        dialog = ShortcutsDialog(self)
+        dialog.exec()
+
+    def open_readme(self):
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        readme_path = os.path.join(app_dir, "readme.txt")
+        
+        if not os.path.exists(readme_path):
+            system_path = "/usr/share/zelix-hello/readme.txt"
+            if os.path.exists(system_path):
+                readme_path = system_path
+                
+        if os.path.exists(readme_path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(readme_path))
+        else:
+            QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS/blob/main/README.md"))
 
     def change_language(self, lang):
         Translator.set_language(lang)
@@ -197,39 +267,13 @@ class DashboardTab(QWidget):
         self.btn_development.setText(Translator.get("btn_development"))
         self.btn_donate.setText(Translator.get("btn_donate"))
         
-        self.lbl_install.setText(Translator.get("install_header"))
-        self.btn_install.setText(Translator.get("btn_launch_installer"))
+        self.btn_shortcuts.setText(Translator.get("btn_shortcuts"))
         
         self.lbl_launch.setText(Translator.get("lbl_launch_start"))
-
-    def launch_installer(self):
-        # Try to get localized Desktop path
-        try:
-            desktop_path = subprocess.check_output(["xdg-user-dir", "DESKTOP"]).decode("utf-8").strip()
-        except Exception:
-            desktop_path = os.path.expanduser("~/Desktop")
-            if not os.path.exists(desktop_path):
-                desktop_path = os.path.expanduser("~/Masaüstü")
-        
-        desktop_file = os.path.join(desktop_path, "zelix-installer.desktop")
-        
-        if os.path.exists(desktop_file):
-            # Try xdg-open first as it handles Desktop files well in most DEs
-            # then fallback to gtk-launch or manual execution
-            try:
-                subprocess.Popen(["xdg-open", desktop_file])
-            except Exception:
-                try:
-                    subprocess.Popen(["gtk-launch", "zelix-installer.desktop"])
-                except Exception as e:
-                    print(f"Could not launch installer: {e}")
+        if self.btn_autostart.isChecked():
+            self.btn_autostart.setText(Translator.get("toggle_on"))
         else:
-            # Fallback: try to launch directly if we know where it is
-            fallback_script = os.path.expanduser("~/ZelixBuild/zelixins/myself.py")
-            if os.path.exists(fallback_script):
-                subprocess.Popen(["alacritty", "-e", "sudo", "python", fallback_script])
-            else:
-                print(f"Installer desktop file not found at {desktop_file}")
+            self.btn_autostart.setText(Translator.get("toggle_off"))
 
     def toggle_autostart(self):
         autostart_dir = os.path.expanduser("~/.config/autostart")
@@ -237,29 +281,31 @@ class DashboardTab(QWidget):
             os.makedirs(autostart_dir, exist_ok=True)
             
         if self.btn_autostart.isChecked():
-            self.btn_autostart.setText("ON")
+            self.btn_autostart.setText(Translator.get("toggle_on"))
             desktop_content = (
                 "[Desktop Entry]\n"
                 "Type=Application\n"
                 "Name=Zelix Hello\n"
                 "Comment=Welcome to ZelixOS\n"
-                "Exec=/usr/share/applications/zelix-hello.desktop\n"
+                "Exec=zelix-hello\n"
                 "Icon=zelixos\n"
                 "Terminal=false\n"
             )
             try:
                 orig_file = "/usr/share/applications/zelix-hello.desktop"
+                if os.path.exists(self.autostart_path) or os.path.islink(self.autostart_path):
+                    os.remove(self.autostart_path)
                 if os.path.exists(orig_file):
                     os.symlink(orig_file, self.autostart_path)
                 else:
-                    with open(self.autostart_path, "w") as f:
+                    with open(self.autostart_path, "w", encoding="utf-8") as f:
                         f.write(desktop_content)
             except Exception as e:
                 print(f"Error enabling autostart: {e}")
         else:
-            self.btn_autostart.setText("OFF")
+            self.btn_autostart.setText(Translator.get("toggle_off"))
             # Remove user autostart
-            if os.path.exists(self.autostart_path):
+            if os.path.exists(self.autostart_path) or os.path.islink(self.autostart_path):
                 try:
                     os.remove(self.autostart_path)
                 except Exception as e:
@@ -268,8 +314,6 @@ class DashboardTab(QWidget):
             # Remove system autostart
             if os.path.exists(self.system_autostart_path):
                 try:
-                    # Attempt to remove system-wide autostart. 
-                    # We use sudo as it's likely a live system or admin user.
-                    subprocess.run(["sudo", "rm", "-f", self.system_autostart_path], check=False)
+                    subprocess.run(["pkexec", "rm", "-f", self.system_autostart_path], check=False)
                 except Exception as e:
                     print(f"Error disabling system autostart: {e}")
