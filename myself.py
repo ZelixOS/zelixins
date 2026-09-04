@@ -1369,7 +1369,11 @@ class SummaryPage(InstallerPage):
     @staticmethod
     def _build_package_list(sys_page, extra_packages=None) -> list:
         """Builds the package list dynamically based on bootloader, DE, and user selections."""
-        base_packages = ["firefox", "dolphin", "konsole", "python-pyqt6", "sudo"]
+        base_packages = [
+            "firefox", "dolphin", "konsole", "python-pyqt6", "sudo", "plymouth",
+            "qt6-svg", "qt6-5compat", "qt5-quickcontrols2", "qt5-graphicaleffects",
+            "sddm-kcm", "fastfetch"
+        ]
 
         # Add bootloader-specific packages
         bootloader = sys_page.selected_bootloader()
@@ -1422,23 +1426,82 @@ class SummaryPage(InstallerPage):
         """Builds post-install custom commands for archinstall.
         
         These commands run inside the chroot after base installation.
+        They configure ZelixOS theming (GRUB, Plymouth, SDDM, KDE colors).
         """
         commands = []
 
         if multilib_enabled:
-            # Enable multilib repository in pacman.conf
-            # The sed command uncomments the [multilib] section and its Include line
             commands.append(
                 'sed -i "/\\[multilib\\]/,/Include/ s/^#//" /etc/pacman.conf'
             )
             commands.append("pacman -Sy --noconfirm")
+
+        # ── 1. Remove archiso leftover that breaks mkinitcpio ──
+        commands.append("rm -f /etc/mkinitcpio.conf.d/archiso.conf /etc/mkinitcpio.conf.d/archiso*")
+
+        # ── 2. Write mkinitcpio.conf with plymouth hook ──
+        commands.append(
+            'echo -e "MODULES=()\\nBINARIES=()\\nFILES=()\\n'
+            'HOOKS=(base udev plymouth autodetect modconf kms keyboard keymap consolefont block filesystems fsck)\\n'
+            'COMPRESSION=\\"zstd\\"" > /etc/mkinitcpio.conf'
+        )
+
+        # ── 3. Configure Plymouth ──
+        commands.append("mkdir -p /etc/plymouth")
+        commands.append(
+            'echo -e "[Daemon]\\nTheme=zelix-aurora\\nShowDelay=0\\nDeviceTimeout=8" > /etc/plymouth/plymouthd.conf'
+        )
+        commands.append("plymouth-set-default-theme -R zelix-aurora || mkinitcpio -P || true")
+
+        # ── 4. Configure GRUB theme & quiet splash ──
+        commands.append("mkdir -p /boot/grub/themes/zelix-aurora /usr/share/grub/themes/zelix-aurora")
+        commands.append("cp -r /usr/share/grub/themes/zelix-aurora/* /boot/grub/themes/zelix-aurora/ 2>/dev/null || true")
+        commands.append(
+            'sed -i \'s/GRUB_DISTRIBUTOR="Arch"/GRUB_DISTRIBUTOR="ZelixOS"/g\' /etc/default/grub 2>/dev/null || true'
+        )
+        commands.append(
+            "grep -q 'GRUB_THEME' /etc/default/grub && "
+            'sed -i \'s|^#*GRUB_THEME=.*|GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"|\' /etc/default/grub || '
+            'echo \'GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"\' >> /etc/default/grub'
+        )
+        commands.append(
+            "grep -q 'GRUB_CMDLINE_LINUX_DEFAULT' /etc/default/grub && "
+            'sed -i \'s/GRUB_CMDLINE_LINUX_DEFAULT=".*"/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3"/\' /etc/default/grub || '
+            'echo \'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3"\' >> /etc/default/grub'
+        )
+        commands.append(
+            "grep -q 'GRUB_TERMINAL_OUTPUT' /etc/default/grub && "
+            'sed -i \'s/GRUB_TERMINAL_OUTPUT=".*"/GRUB_TERMINAL_OUTPUT="gfxterm"/\' /etc/default/grub || '
+            'echo \'GRUB_TERMINAL_OUTPUT="gfxterm"\' >> /etc/default/grub'
+        )
+        commands.append("grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true")
+
+        # ── 5. Configure SDDM theme ──
+        commands.append("mkdir -p /etc/sddm.conf.d")
+        commands.append(
+            'echo -e "[Theme]\\nCurrent=zelix-aurora\\nCursorTheme=breeze_cursors" > /etc/sddm.conf'
+        )
+        commands.append(
+            'echo -e "[Theme]\\nCurrent=zelix-aurora\\nCursorTheme=breeze_cursors" > /etc/sddm.conf.d/zelix.conf'
+        )
+        commands.append("systemctl enable sddm.service 2>/dev/null || true")
+        commands.append("systemctl set-default graphical.target 2>/dev/null || true")
+
+        # ── 6. Apply KDE dark theme to all users via skel ──
+        commands.append(
+            'for d in /home/*/; do '
+            'u=$(basename "$d"); '
+            'mkdir -p "$d/.config"; '
+            'cp -rn /etc/skel/.config/* "$d/.config/" 2>/dev/null; '
+            'chown -R "$u:$u" "$d" 2>/dev/null; '
+            'done || true'
+        )
 
         # Install flatpak apps if any were selected
         flatpak_apps = [pkg.split(":", 1)[1] for pkg in extra_packages if pkg.startswith("flatpak:")]
         if flatpak_apps:
             commands.append("flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo")
             for app_name in flatpak_apps:
-                # Map friendly names to flatpak IDs
                 flatpak_ids = {
                     "spotify": "com.spotify.Client",
                 }
@@ -1824,7 +1887,7 @@ class InstallProgressPage(InstallerPage):
                 
                 if fstype in ("vfat", "fat32") and boot_part is None:
                     boot_part = part_name
-                elif fstype == "ext4" and root_part is None:
+                elif fstype in ("ext4", "btrfs", "xfs", "f2fs") and root_part is None:
                     root_part = part_name
         except Exception:
             pass
@@ -1876,6 +1939,13 @@ echo "Kök bölüm bağlanıyor: {root_part}"
 if ! mount {root_part} /mnt/zelix_target; then
     echo "HATA: Kök bölüm ({root_part}) bağlanamadı!"
     exit 1
+fi
+
+# Handle BTRFS subvolume layout if created by archinstall
+if [ -d "/mnt/zelix_target/@/etc" ]; then
+    echo "BTRFS @ alt hacmi algılandı, kök alt hacim bağlanıyor..."
+    umount /mnt/zelix_target
+    mount -o subvol=@ {root_part} /mnt/zelix_target
 fi
 
 # Verify mount succeeded by checking for essential directories
@@ -1935,31 +2005,13 @@ if [ "$BOOT_MOUNTED" == "1" ]; then
         echo "systemd-boot girişleri düzenleniyor..."
         sed -i 's/Arch Linux/ZelixOS/g' /mnt/zelix_target/boot/loader/entries/*.conf 2>/dev/null || true
     fi
-    
-    # 2. GRUB
-    if [ -f "/mnt/zelix_target/etc/default/grub" ]; then
-        echo "GRUB yapılandırması ve Zelix Aurora teması güncelleniyor..."
-        sed -i 's/GRUB_DISTRIBUTOR="Arch"/GRUB_DISTRIBUTOR="ZelixOS"/g' /mnt/zelix_target/etc/default/grub
-        sed -i 's/^#*GRUB_THEME=.*/GRUB_THEME="\/usr\/share\/grub\/themes\/zelix-aurora\/theme.txt"/' /mnt/zelix_target/etc/default/grub
-        if ! grep -q "GRUB_THEME" /mnt/zelix_target/etc/default/grub; then
-            echo 'GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"' >> /mnt/zelix_target/etc/default/grub
-        fi
-        sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=".*"/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3"/' /mnt/zelix_target/etc/default/grub
-        # Run grub-mkconfig inside chroot
-        if command -v arch-chroot &> /dev/null; then
-            arch-chroot /mnt/zelix_target grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
-        fi
-    fi
 fi
 
 # Always enable multilib repository (ZelixOS default)
 echo "Multilib deposu etkinleştiriliyor..."
 if [ -f "/mnt/zelix_target/etc/pacman.conf" ]; then
-    # Uncomment [multilib] section and its Include line
     sed -i '/\\[multilib\\]/,/Include/ s/^#//' /mnt/zelix_target/etc/pacman.conf
     echo "-> Multilib deposu etkinleştirildi."
-else
-    echo "UYARI: pacman.conf bulunamadı, multilib atlanıyor."
 fi
 
 # Add zelixrepo to the installed system
@@ -1978,11 +2030,70 @@ EOF
     fi
 fi
 
-# Enable SDDM & Plymouth
+# ═══════════════════════════════════════════════════════════════════
+# ZelixOS Görsel Tema Yapılandırması (GRUB, Plymouth, SDDM, KDE)
+# arch-chroot ile hedef sistemin içinde çalıştırılır
+# ═══════════════════════════════════════════════════════════════════
 if command -v arch-chroot &>/dev/null; then
-    echo "SDDM ve Plymouth yapılandırılıyor..."
-    arch-chroot /mnt/zelix_target systemctl enable sddm 2>/dev/null || true
+    echo "ZelixOS görsel temaları yapılandırılıyor (GRUB, Plymouth, SDDM, KDE)..."
+
+    # 1. archiso kalıntılarını temizle
+    arch-chroot /mnt/zelix_target rm -f /etc/mkinitcpio.conf.d/archiso.conf /etc/mkinitcpio.conf.d/archiso* 2>/dev/null || true
+
+    # 2. mkinitcpio.conf — plymouth hook ile yaz
+    cat <<'MKCEOF' > /mnt/zelix_target/etc/mkinitcpio.conf
+MODULES=()
+BINARIES=()
+FILES=()
+HOOKS=(base udev plymouth autodetect modconf kms keyboard keymap consolefont block filesystems fsck)
+COMPRESSION="zstd"
+MKCEOF
+
+    # 3. Plymouth yapılandırması
+    mkdir -p /mnt/zelix_target/etc/plymouth
+    cat <<'PLYEOF' > /mnt/zelix_target/etc/plymouth/plymouthd.conf
+[Daemon]
+Theme=zelix-aurora
+ShowDelay=0
+DeviceTimeout=8
+PLYEOF
     arch-chroot /mnt/zelix_target plymouth-set-default-theme -R zelix-aurora 2>/dev/null || arch-chroot /mnt/zelix_target mkinitcpio -P 2>/dev/null || true
+
+    # 4. GRUB tema ve quiet splash yapılandırması
+    if [ -f "/mnt/zelix_target/etc/default/grub" ]; then
+        sed -i 's/GRUB_DISTRIBUTOR="Arch"/GRUB_DISTRIBUTOR="ZelixOS"/g' /mnt/zelix_target/etc/default/grub
+        sed -i 's|^#*GRUB_THEME=.*|GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"|' /mnt/zelix_target/etc/default/grub
+        grep -q "GRUB_THEME" /mnt/zelix_target/etc/default/grub || echo 'GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"' >> /mnt/zelix_target/etc/default/grub
+        sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=".*"/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3"/' /mnt/zelix_target/etc/default/grub
+        sed -i 's/GRUB_TERMINAL_OUTPUT=".*"/GRUB_TERMINAL_OUTPUT="gfxterm"/' /mnt/zelix_target/etc/default/grub
+        grep -q "GRUB_TERMINAL_OUTPUT" /mnt/zelix_target/etc/default/grub || echo 'GRUB_TERMINAL_OUTPUT="gfxterm"' >> /mnt/zelix_target/etc/default/grub
+        arch-chroot /mnt/zelix_target grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+    fi
+
+    # 5. SDDM tema yapılandırması
+    mkdir -p /mnt/zelix_target/etc/sddm.conf.d
+    cat <<'SDDMEOF' > /mnt/zelix_target/etc/sddm.conf
+[Theme]
+Current=zelix-aurora
+CursorTheme=breeze_cursors
+SDDMEOF
+    cat <<'SDDMEOF2' > /mnt/zelix_target/etc/sddm.conf.d/zelix.conf
+[Theme]
+Current=zelix-aurora
+CursorTheme=breeze_cursors
+SDDMEOF2
+    arch-chroot /mnt/zelix_target systemctl enable sddm.service 2>/dev/null || true
+    arch-chroot /mnt/zelix_target systemctl set-default graphical.target 2>/dev/null || true
+
+    # 6. KDE koyu tema — skel'den tüm kullanıcılara kopyala
+    for user_home in /mnt/zelix_target/home/*/; do
+        if [ -d "$user_home" ]; then
+            user_name=$(basename "$user_home")
+            mkdir -p "$user_home/.config"
+            cp -rn /mnt/zelix_target/etc/skel/.config/* "$user_home/.config/" 2>/dev/null || true
+            arch-chroot /mnt/zelix_target chown -R "$user_name:$user_name" "/home/$user_name" 2>/dev/null || true
+        fi
+    done
 fi
 
 echo "Senkronize ediliyor..."
