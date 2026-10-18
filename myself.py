@@ -2142,7 +2142,7 @@ echo "İşlem başarıyla tamamlandı!"
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.04")
+        self.setWindowTitle("ZelixOS Installer v1.0.5")
         self.setMinimumSize(800, 600)
         self.resize(1024, 720)
 
