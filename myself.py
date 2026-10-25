@@ -1056,6 +1056,8 @@ class ExtraPackagesPage(InstallerPage):
             ("Flatpak", "flatpak"),
             ("GParted", "gparted"),
             ("Fish Shell", "fish"),
+            ("Yay (AUR Helper)", "yay"),
+            ("Paru (AUR Helper)", "paru"),
         ]),
     ]
 
@@ -2148,7 +2150,7 @@ echo "İşlem başarıyla tamamlandı!"
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.0.6")
+        self.setWindowTitle("ZelixOS Installer v1.0.7")
         self.setMinimumSize(800, 600)
         self.resize(1024, 720)
 
