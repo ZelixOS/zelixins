@@ -445,11 +445,11 @@ class WelcomePage(InstallerPage):
         self.main_layout.addItem(spacer_top)
 
         title = QLabel("ZelixOS")
-        title.setStyleSheet("font-size: 80px; font-weight: bold; color: #9b59b6; letter-spacing: 2px;")
+        title.setStyleSheet("font-size: 76px; font-weight: bold; color: #FFFFFF; letter-spacing: 2px;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.subtitle = QLabel()
-        self.subtitle.setStyleSheet("font-size: 18px; color: #bdc3c7; margin-bottom: 20px;")
+        self.subtitle.setStyleSheet("font-size: 16px; color: #9E9EA8; margin-bottom: 20px;")
         self.subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Logo
@@ -468,7 +468,7 @@ class WelcomePage(InstallerPage):
         lang_row = QHBoxLayout()
         lang_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lang_label = QLabel()
-        self.lang_label.setStyleSheet("color: #bdc3c7; font-size: 14px; margin-right: 8px;")
+        self.lang_label.setStyleSheet("color: #9E9EA8; font-size: 14px; margin-right: 8px;")
         self.lang_combo = QComboBox()
         self.lang_combo.addItem("Türkçe", "tr")
         self.lang_combo.addItem("English", "en")
@@ -480,7 +480,8 @@ class WelcomePage(InstallerPage):
         btn_layout = QHBoxLayout()
         btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.start_btn = QPushButton()
-        self.start_btn.setFixedSize(300, 55)
+        self.start_btn.setObjectName("primary_btn")
+        self.start_btn.setFixedSize(300, 52)
         self.start_btn.clicked.connect(lambda: self.main_window.next_page())
         btn_layout.addWidget(self.start_btn)
 
@@ -493,7 +494,7 @@ class WelcomePage(InstallerPage):
         
         # Internet Warning
         self.net_warn = QLabel()
-        self.net_warn.setStyleSheet("color: #e74c3c; font-weight: bold; margin-bottom: 10px;")
+        self.net_warn.setStyleSheet("color: #FF5555; font-weight: bold; margin-bottom: 10px;")
         self.net_warn.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.net_warn.setWordWrap(True)
         self.net_warn.hide()
@@ -629,6 +630,7 @@ class SystemConfigPage(InstallerPage):
         self.back_btn = QPushButton()
         self.back_btn.clicked.connect(lambda: self.main_window.prev_page())
         self.next_btn = QPushButton()
+        self.next_btn.setObjectName("primary_btn")
         self.next_btn.clicked.connect(lambda: self.main_window.next_page())
 
         nav_layout.addWidget(self.back_btn)
@@ -732,7 +734,7 @@ class DiskConfigPage(InstallerPage):
         self.disk_form.addRow(self.disk_select_label, self.disk_combo)
 
         self.refresh_btn = QPushButton()
-        self.refresh_btn.setStyleSheet("background: #34495e; padding: 8px;")
+        self.refresh_btn.setStyleSheet("background: #1C1D24; border: 1px solid #30313C; color: #FFFFFF; padding: 8px; border-radius: 6px;")
         self.refresh_btn.clicked.connect(self.refresh_disks)
         self.disk_form.addRow("", self.refresh_btn)
 
@@ -743,6 +745,7 @@ class DiskConfigPage(InstallerPage):
         self.back_btn = QPushButton()
         self.back_btn.clicked.connect(lambda: self.main_window.prev_page())
         self.next_btn = QPushButton()
+        self.next_btn.setObjectName("primary_btn")
         self.next_btn.clicked.connect(lambda: self.main_window.next_page())
 
         nav_layout.addWidget(self.back_btn)
@@ -816,7 +819,7 @@ class UserAccountPage(InstallerPage):
         self.admin_check.setChecked(True)
 
         self.add_user_btn = QPushButton()
-        self.add_user_btn.setStyleSheet("background: #2980b9;")
+        self.add_user_btn.setStyleSheet("background: #FFFFFF; color: #000000; font-weight: bold; border-radius: 6px; padding: 10px;")
         self.add_user_btn.clicked.connect(self.add_user)
 
         user_add_layout.addRow(self.username_label_w, self.username_input)
@@ -834,7 +837,7 @@ class UserAccountPage(InstallerPage):
         self.main_layout.addWidget(self.user_list_widget)
 
         self.remove_user_btn = QPushButton()
-        self.remove_user_btn.setStyleSheet("background: #c0392b; padding: 8px;")
+        self.remove_user_btn.setStyleSheet("background: #241315; color: #FF7070; border: 1px solid #4A1E22; border-radius: 6px; padding: 8px;")
         self.remove_user_btn.clicked.connect(self.remove_user)
         self.main_layout.addWidget(self.remove_user_btn)
 
@@ -844,6 +847,7 @@ class UserAccountPage(InstallerPage):
         self.back_btn = QPushButton()
         self.back_btn.clicked.connect(lambda: self.main_window.prev_page())
         self.next_btn = QPushButton()
+        self.next_btn.setObjectName("primary_btn")
         self.next_btn.clicked.connect(self.validate_and_next)
 
         nav_layout.addWidget(self.back_btn)
@@ -981,6 +985,7 @@ class MirrorConfigPage(InstallerPage):
         self.back_btn = QPushButton()
         self.back_btn.clicked.connect(lambda: self.main_window.prev_page())
         self.next_btn = QPushButton()
+        self.next_btn.setObjectName("primary_btn")
         self.next_btn.clicked.connect(lambda: self.main_window.next_page())
 
         nav_layout.addWidget(self.back_btn)
@@ -1077,15 +1082,15 @@ class ExtraPackagesPage(InstallerPage):
         self.multilib_check = QCheckBox()
         self.multilib_check.setChecked(True)  # Enabled by default per user request
         self.multilib_check.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #e67e22; padding: 8px; "
-            "background-color: #1b1e20; border: 1px solid #34495e; border-radius: 6px;"
+            "font-size: 14px; font-weight: bold; color: #FFFFFF; padding: 8px; "
+            "background-color: #16171B; border: 1px solid #2B2C34; border-radius: 6px;"
         )
         self.main_layout.addWidget(self.multilib_check)
         self.main_layout.addSpacing(5)
 
         # Selected count label
         self.count_label = QLabel()
-        self.count_label.setStyleSheet("color: #9b59b6; font-weight: bold; font-size: 13px;")
+        self.count_label.setStyleSheet("color: #FFFFFF; font-weight: bold; font-size: 13px;")
         self.count_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.main_layout.addWidget(self.count_label)
 
@@ -1111,8 +1116,8 @@ class ExtraPackagesPage(InstallerPage):
             cat_frame = QFrame()
             cat_frame.setStyleSheet("""
                 QFrame { 
-                    background-color: #1b1e20; 
-                    border: 1px solid #31363b; 
+                    background-color: #16171C; 
+                    border: 1px solid #262730; 
                     border-radius: 8px; 
                     padding: 8px; 
                 }
@@ -1121,7 +1126,7 @@ class ExtraPackagesPage(InstallerPage):
             cat_layout.setSpacing(4)
 
             cat_label = QLabel(get_text(cat_key))
-            cat_label.setStyleSheet("font-size: 15px; font-weight: bold; color: #9b59b6; border: none;")
+            cat_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #FFFFFF; border: none; text-transform: uppercase;")
             cat_layout.addWidget(cat_label)
             # Store reference for retranslate
             cat_frame.setProperty("cat_key", cat_key)
@@ -1129,7 +1134,7 @@ class ExtraPackagesPage(InstallerPage):
 
             for display_name, pkg_name in packages:
                 cb = QCheckBox(display_name)
-                cb.setStyleSheet("color: #bdc3c7; font-size: 13px; border: none; padding: 2px;")
+                cb.setStyleSheet("color: #CCCCCC; font-size: 13px; border: none; padding: 2px;")
                 cb.stateChanged.connect(self._update_count)
                 cat_layout.addWidget(cb)
                 self.category_checkboxes[pkg_name] = cb
@@ -1148,6 +1153,7 @@ class ExtraPackagesPage(InstallerPage):
         self.back_btn = QPushButton()
         self.back_btn.clicked.connect(lambda: self.main_window.prev_page())
         self.next_btn = QPushButton()
+        self.next_btn.setObjectName("primary_btn")
         self.next_btn.clicked.connect(lambda: self.main_window.next_page())
 
         nav_layout.addWidget(self.back_btn)
@@ -1210,12 +1216,12 @@ class SummaryPage(InstallerPage):
         self.summary_box.setOpenExternalLinks(False)
         self.summary_box.setStyleSheet("""
             QTextBrowser {
-                background-color: #1b1e20;
-                border: 1px solid #31363b;
-                border-radius: 10px;
-                padding: 6px;
+                background-color: #141519;
+                border: 1px solid #262730;
+                border-radius: 8px;
+                padding: 10px;
                 font-size: 14px;
-                color: #eff0f1;
+                color: #FFFFFF;
             }
         """)
         self.main_layout.addWidget(self.summary_box)
@@ -1227,7 +1233,7 @@ class SummaryPage(InstallerPage):
         self.back_btn.clicked.connect(lambda: self.main_window.prev_page())
 
         self.finish_btn = QPushButton()
-        self.finish_btn.setStyleSheet("background: #e74c3c; color: white; font-weight: bold; font-size: 16px;")
+        self.finish_btn.setStyleSheet("background: #FFFFFF; color: #000000; font-weight: bold; font-size: 15px; border-radius: 6px; padding: 12px 24px;")
         self.finish_btn.clicked.connect(self.start_install_process)
 
         nav_layout.addWidget(self.back_btn)
@@ -1238,11 +1244,11 @@ class SummaryPage(InstallerPage):
         self.retranslate()
 
     @staticmethod
-    def _row(label: str, value: str, value_color: str = "#eff0f1") -> str:
+    def _row(label: str, value: str, value_color: str = "#FFFFFF") -> str:
         """Returns one HTML table row for the summary."""
         return (
             f'<tr>'
-            f'<td style="padding:6px 14px 6px 0; color:#9b59b6; white-space:nowrap;"><b>{label}</b></td>'
+            f'<td style="padding:6px 14px 6px 0; color:#AAAAAA; white-space:nowrap;"><b>{label}</b></td>'
             f'<td style="padding:6px 0; color:{value_color};">{value}</td>'
             f'</tr>'
         )
@@ -1251,7 +1257,7 @@ class SummaryPage(InstallerPage):
     def _section(heading: str) -> str:
         return (
             f'<tr><td colspan="2" style="padding-top:14px; padding-bottom:2px;">'
-            f'<span style="color:#7f8c8d; font-size:11px; letter-spacing:1px;">'
+            f'<span style="color:#888892; font-size:11px; letter-spacing:1px;">'
             f'{heading.upper()}</span></td></tr>'
         )
 
@@ -1765,19 +1771,20 @@ class InstallProgressPage(InstallerPage):
 
         self.title_label = QLabel()
         self.title_label.setStyleSheet(
-            "font-size: 28px; font-weight: bold; color: #f39c12; margin-bottom: 10px;"
+            "font-size: 26px; font-weight: bold; color: #FFFFFF; margin-bottom: 10px;"
         )
         self.main_layout.addWidget(self.title_label)
 
         self.log_console = QPlainTextEdit()
         self.log_console.setReadOnly(True)
         self.log_console.setStyleSheet("""
-            background-color: #0c0c0c;
-            color: #00ff00;
+            background-color: #0A0B0E;
+            color: #D8D8E0;
+            border: 1px solid #202128;
             font-family: 'Consolas', 'Monospace';
             font-size: 13px;
             padding: 10px;
-            border-radius: 5px;
+            border-radius: 6px;
         """)
         self.main_layout.addWidget(self.log_console)
 
@@ -1785,7 +1792,7 @@ class InstallProgressPage(InstallerPage):
 
         self.finish_btn = QPushButton()
         self.finish_btn.setStyleSheet(
-            "background: #2ecc71; color: black; font-weight: bold; font-size: 16px;"
+            "background: #FFFFFF; color: #000000; font-weight: bold; font-size: 16px; border-radius: 6px; padding: 12px;"
         )
         self.finish_btn.hide()
         self.finish_btn.clicked.connect(lambda: os.system("reboot"))
@@ -1832,7 +1839,7 @@ class InstallProgressPage(InstallerPage):
             self.run_post_install()
             self.title_label.setText(get_text("install_title_done"))
             self.title_label.setStyleSheet(
-                "font-size: 28px; font-weight: bold; color: #2ecc71;"
+                "font-size: 28px; font-weight: bold; color: #FFFFFF;"
             )
             self.log_console.appendPlainText(get_text("install_done_msg"))
             self.finish_btn.show()
@@ -2150,7 +2157,7 @@ echo "İşlem başarıyla tamamlandı!"
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.0.8")
+        self.setWindowTitle("ZelixOS Installer v1.0.9")
         self.setMinimumSize(800, 600)
         self.resize(1024, 720)
 
@@ -2161,7 +2168,7 @@ class MainWindow(QWidget):
         # Left sidebar
         sidebar = QFrame()
         sidebar.setFixedWidth(250)
-        sidebar.setStyleSheet("background-color: #1b1e20; border-right: 2px solid #31363b;")
+        sidebar.setStyleSheet("background-color: #0C0D10; border-right: 1px solid #1C1D24;")
 
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(20, 40, 20, 20)
@@ -2184,7 +2191,7 @@ class MainWindow(QWidget):
             side_logo_label.setPixmap(scaled_side_logo)
         
         logo_text = QLabel("ZelixOS")
-        logo_text.setStyleSheet("font-size: 24px; font-weight: bold; color: #9b59b6; border: none; background: transparent;")
+        logo_text.setStyleSheet("font-size: 24px; font-weight: bold; color: #FFFFFF; border: none; background: transparent;")
         
         logo_container.addWidget(side_logo_label)
         logo_container.addWidget(logo_text)
@@ -2202,7 +2209,7 @@ class MainWindow(QWidget):
 
         # Right content area
         content_frame = QFrame()
-        content_frame.setStyleSheet("background-color: #24272b;")
+        content_frame.setStyleSheet("background-color: #121318;")
         content_layout = QVBoxLayout(content_frame)
         content_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -2230,28 +2237,51 @@ class MainWindow(QWidget):
 
         self.setStyleSheet("""
             QWidget {
-                font-family: 'Segoe UI', sans-serif;
-                color: #eff0f1;
+                font-family: 'Segoe UI', 'Noto Sans', sans-serif;
+                color: #FFFFFF;
             }
             QLineEdit, QComboBox, QListWidget {
-                background-color: #1b1e20;
-                border: 1px solid #31363b;
+                background-color: #17181D;
+                border: 1px solid #282932;
                 border-radius: 6px;
                 padding: 10px;
-                font-size: 15px;
+                font-size: 14px;
+                color: #FFFFFF;
             }
             QLineEdit:focus, QComboBox:focus {
-                border: 1px solid #9b59b6;
+                border: 1px solid #FFFFFF;
             }
             QPushButton {
-                background: #8e44ad;
-                color: white;
+                background-color: #1A1B22;
+                color: #FFFFFF;
+                border: 1px solid #2C2D38;
                 border-radius: 6px;
-                padding: 12px;
-                font-weight: bold;
+                padding: 10px 18px;
+                font-weight: 600;
+                font-size: 14px;
             }
             QPushButton:hover {
-                background: #9b59b6;
+                background-color: #252630;
+                border: 1px solid #444654;
+                color: #FFFFFF;
+            }
+            QPushButton:pressed {
+                background-color: #FFFFFF;
+                color: #000000;
+            }
+            QPushButton#primary_btn {
+                background-color: #FFFFFF;
+                color: #000000;
+                border: 1px solid #FFFFFF;
+                font-weight: bold;
+            }
+            QPushButton#primary_btn:hover {
+                background-color: #E0E0E0;
+                border: 1px solid #E0E0E0;
+                color: #000000;
+            }
+            QPushButton#primary_btn:pressed {
+                background-color: #CCCCCC;
             }
         """)
 
@@ -2306,15 +2336,15 @@ class MainWindow(QWidget):
         for i, lbl in enumerate(self.step_labels):
             if i == idx:
                 lbl.setStyleSheet(
-                    "font-size: 16px; margin-bottom: 15px; color: #9b59b6; font-weight: bold;"
+                    "font-size: 15px; margin-bottom: 14px; color: #FFFFFF; font-weight: bold;"
                 )
             elif i < idx:
                 lbl.setStyleSheet(
-                    "font-size: 16px; margin-bottom: 15px; color: #2ecc71;"
+                    "font-size: 15px; margin-bottom: 14px; color: #888892;"
                 )
             else:
                 lbl.setStyleSheet(
-                    "font-size: 16px; margin-bottom: 15px; color: #7f8c8d;"
+                    "font-size: 15px; margin-bottom: 14px; color: #3A3B44;"
                 )
 
 

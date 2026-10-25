@@ -1,6 +1,6 @@
 title-text: ""
 desktop-image: "background.png"
-desktop-color: "#12151D"
+desktop-color: "#000000"
 terminal-font: "Unifont Regular 16"
 
 + boot_menu {
@@ -8,7 +8,7 @@ terminal-font: "Unifont Regular 16"
     top = 30%
     width = 50%
     height = 45%
-    item_color = "#B0B5C0"
+    item_color = "#888888"
     selected_item_color = "#FFFFFF"
     item_height = 40
     item_padding = 10
@@ -24,9 +24,9 @@ terminal-font: "Unifont Regular 16"
     left = 35%
     top = 80%
     width = 30%
-    height = 8
+    height = 6
     show_text = false
-    bg_color = "#1E222D"
-    fg_color = "#1A4D8F"
-    border_color = "#303542"
+    bg_color = "#181818"
+    fg_color = "#FFFFFF"
+    border_color = "#333333"
 }
