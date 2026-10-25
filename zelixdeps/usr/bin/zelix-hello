@@ -1,0 +1,7 @@
+#!/bin/bash
+if [ -d /usr/share/zelix-hello ]; then
+    cd /usr/share/zelix-hello && exec python3 /usr/share/zelix-hello/main.py "$@"
+else
+    echo "Hata: /usr/share/zelix-hello dizini bulunamadı." >&2
+    exit 1
+fi

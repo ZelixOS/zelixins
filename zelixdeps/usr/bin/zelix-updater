@@ -1,0 +1,7 @@
+#!/bin/bash
+if [ -d /usr/share/zelix-updater ]; then
+    cd /usr/share/zelix-updater && exec python3 /usr/share/zelix-updater/main.py "$@"
+else
+    echo "Hata: /usr/share/zelix-updater dizini bulunamadı." >&2
+    exit 1
+fi

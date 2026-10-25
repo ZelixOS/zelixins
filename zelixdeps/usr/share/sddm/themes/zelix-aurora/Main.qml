@@ -17,6 +17,17 @@ Rectangle {
     property color textSecondary: config.textSecondary || "#B0B5C0"
     property int sessionIndex: sessionModel.lastIndex >= 0 ? sessionModel.lastIndex : 0
 
+    function getSessionName(idx) {
+        if (!sessionModel || sessionModel.count === 0) return "Plasma (Wayland)";
+        var name = sessionModel.data(sessionModel.index(idx, 0), 260);
+        if (name && name !== "") return name;
+        for (var r = 257; r <= 262; r++) {
+            var val = sessionModel.data(sessionModel.index(idx, 0), r);
+            if (typeof val === "string" && val.length > 0 && val.indexOf("/") !== 0) return val;
+        }
+        return "Plasma (Wayland)";
+    }
+
     TextConstants { id: textConstants }
 
     // Background Image
@@ -291,24 +302,57 @@ Rectangle {
         anchors.margins: 24
         height: 48
 
-        // Left: Session indicator
+        // Left: Session indicator & switcher
         Rectangle {
+            id: sessionBtn
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             height: 36
-            width: sessionText.implicitWidth + 24
-            color: Qt.rgba(0.08, 0.1, 0.14, 0.85)
+            width: sessionRow.implicitWidth + 24
+            color: mouseSession.containsMouse ? Qt.rgba(0.12, 0.16, 0.22, 0.95) : Qt.rgba(0.08, 0.1, 0.14, 0.85)
             radius: 8
-            border.color: "#303542"
+            border.color: mouseSession.containsMouse ? root.accentCol : "#303542"
             border.width: 1
 
-            Text {
-                id: sessionText
+            Row {
+                id: sessionRow
                 anchors.centerIn: parent
-                text: "🖥 " + (sessionModel.lastIndex >= 0 && sessionModel.count > sessionModel.lastIndex ? sessionModel.data(sessionModel.index(sessionModel.lastIndex, 0), Qt.DisplayRole) : "Plasma (Wayland)")
-                color: root.textSecondary
-                font.pixelSize: 12
-                font.family: "Noto Sans"
+                spacing: 6
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "🖥"
+                    font.pixelSize: 13
+                }
+
+                Text {
+                    id: sessionText
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.getSessionName(root.sessionIndex)
+                    color: mouseSession.containsMouse ? "#FFFFFF" : root.textSecondary
+                    font.pixelSize: 12
+                    font.family: "Noto Sans"
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "▾"
+                    color: root.textSecondary
+                    font.pixelSize: 10
+                    visible: sessionModel.count > 1
+                }
+            }
+
+            MouseArea {
+                id: mouseSession
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: sessionModel.count > 1 ? Qt.PointingHandCursor : Qt.ArrowCursor
+                onClicked: {
+                    if (sessionModel.count > 1) {
+                        root.sessionIndex = (root.sessionIndex + 1) % sessionModel.count
+                    }
+                }
             }
         }
 
