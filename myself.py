@@ -454,7 +454,7 @@ class WelcomePage(InstallerPage):
 
         # Logo
         self.logo_label = QLabel()
-        dirr = os.path.dirname(os.path.abspath(__file__))
+        dirr = os.path.dirname(os.path.realpath(__file__))
         local_logo = os.path.join(dirr, "icons", "zelixos_logo.png")
         logo_path = local_logo if os.path.exists(local_logo) else "/usr/share/zelixins/icons/zelixos_logo.png"
         self.logo_pixmap = QPixmap(logo_path)
@@ -1848,8 +1848,10 @@ class InstallProgressPage(InstallerPage):
 
     def run_post_install(self):
         """Copies ZelixOS-specific files (zelixdeps) to the newly installed disk."""
-        dirr = os.path.dirname(os.path.abspath(__file__))
+        dirr = os.path.dirname(os.path.realpath(__file__))
         deps_path = os.path.join(dirr, "zelixdeps")
+        if not os.path.exists(deps_path):
+            deps_path = "/usr/share/zelixins/zelixdeps"
 
         if not os.path.exists(deps_path):
             self.log_console.appendPlainText(get_text("post_warn_no_deps"))
@@ -1933,6 +1935,7 @@ LOGFILE="/tmp/zelixos_postinstall.log"
 exec > >(tee -a "$LOGFILE") 2>&1
 
 echo "Hedef dizinler hazırlanıyor..."
+mountpoint -q /mnt/zelix_target && umount /mnt/zelix_target 2>/dev/null || true
 mkdir -p /mnt/zelix_target
 
 echo "Kök bölüm bağlanıyor: {root_part}"
@@ -2061,6 +2064,8 @@ PLYEOF
 
     # 4. GRUB tema ve quiet splash yapılandırması
     if [ -f "/mnt/zelix_target/etc/default/grub" ]; then
+        arch-chroot /mnt/zelix_target mkdir -p /boot/grub/themes/zelix-aurora /usr/share/grub/themes/zelix-aurora 2>/dev/null || true
+        arch-chroot /mnt/zelix_target cp -r /usr/share/grub/themes/zelix-aurora/* /boot/grub/themes/zelix-aurora/ 2>/dev/null || true
         sed -i 's/GRUB_DISTRIBUTOR="Arch"/GRUB_DISTRIBUTOR="ZelixOS"/g' /mnt/zelix_target/etc/default/grub
         sed -i 's|^#*GRUB_THEME=.*|GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"|' /mnt/zelix_target/etc/default/grub
         grep -q "GRUB_THEME" /mnt/zelix_target/etc/default/grub || echo 'GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"' >> /mnt/zelix_target/etc/default/grub
@@ -2111,8 +2116,9 @@ echo "İşlem başarıyla tamamlandı!"
                 f.write(script_content)
             os.chmod(script_path, 0o755)
 
-            # Use QProcess to run pkexec so we can see the script's output in our console
-            res = subprocess.run(["pkexec", "/bin/bash", script_path], capture_output=True, text=True)
+            # Use direct bash if running as root (e.g. launched with sudo), otherwise pkexec
+            cmd = ["/bin/bash", script_path] if os.geteuid() == 0 else ["pkexec", "/bin/bash", script_path]
+            res = subprocess.run(cmd, capture_output=True, text=True)
             
             if res.returncode == 0:
                 self.log_console.appendPlainText(res.stdout)
@@ -2142,7 +2148,7 @@ echo "İşlem başarıyla tamamlandı!"
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.0.5")
+        self.setWindowTitle("ZelixOS Installer v1.0.6")
         self.setMinimumSize(800, 600)
         self.resize(1024, 720)
 
@@ -2166,7 +2172,7 @@ class MainWindow(QWidget):
         side_logo_label.setFixedSize(32, 32)
         side_logo_label.setStyleSheet("border: none; background: transparent;")
         
-        dirr = os.path.dirname(os.path.abspath(__file__))
+        dirr = os.path.dirname(os.path.realpath(__file__))
         local_logo = os.path.join(dirr, "icons", "zelixos_logo.png")
         logo_path = local_logo if os.path.exists(local_logo) else "/usr/share/zelixins/icons/zelixos_logo.png"
         
