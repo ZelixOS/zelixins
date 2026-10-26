@@ -1,4 +1,5 @@
 import sys
+import os
 import re
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, 
@@ -11,7 +12,14 @@ class UpdaterWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ZelixOS Updater")
-        self.setWindowIcon(QIcon("/usr/share/zelix/zelix-icon.png"))
+        for icon_candidate in (
+            "/usr/share/zelix/zelix-updater.png",
+            "/usr/share/pixmaps/zelix-updater.png",
+            "/usr/share/zelix/zelix-icon.png",
+        ):
+            if os.path.exists(icon_candidate):
+                self.setWindowIcon(QIcon(icon_candidate))
+                break
         self.resize(720, 520)
 
         # Monochromatic Minimalist Theme (OLED Black / Pure White)
@@ -188,6 +196,7 @@ class UpdaterWindow(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    app.setDesktopFileName("zelix-updater")
     window = UpdaterWindow()
     window.show()
     sys.exit(app.exec())

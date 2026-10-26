@@ -2229,7 +2229,15 @@ echo "İşlem başarıyla tamamlandı!"
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.1.4")
+        self.setWindowTitle("ZelixOS Installer v1.1.6")
+        for icon_candidate in (
+            "/usr/share/zelix/zelix-installer.png",
+            "/usr/share/pixmaps/zelix-installer.png",
+            "/usr/share/zelix/zelix-icon.png",
+        ):
+            if os.path.exists(icon_candidate):
+                self.setWindowIcon(QIcon(icon_candidate))
+                break
         self.setMinimumSize(800, 600)
         self.resize(1024, 720)
 
@@ -2432,6 +2440,7 @@ class MainWindow(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setDesktopFileName("zelix-installer")
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
