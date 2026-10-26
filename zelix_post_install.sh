@@ -156,7 +156,7 @@ if [ -f "/mnt/zelix_target/etc/pacman.conf" ]; then
 
 [zelixrepo]
 SigLevel = Optional TrustAll
-Server = https://raw.githubusercontent.com/ZelixOS/zelix-repo/main/x86_64
+Server = https://github.com/ZelixOS/zelix-repo/releases/download/stable
 PAC_EOF
     fi
 fi
