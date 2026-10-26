@@ -2134,13 +2134,13 @@ SDDMEOF2
     # Plasma ilk başlatma update betiği
     cat <<'JSEOF' > /mnt/zelix_target/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/00-zelix-wallpaper.js
 var allDesktops = desktops();
-for (var i = 0; i < allDesktops.length; i++) {
+for (var i = 0; i < allDesktops.length; i++) {{
     var d = allDesktops[i];
     d.wallpaperPlugin = "org.kde.image";
     d.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
     d.writeConfig("Image", "/usr/share/wallpapers/Zelix/minimalistic.png");
     d.writeConfig("FillMode", 2);
-}
+}}
 JSEOF
 
     # İlk girişte koyu tema ve duvar kağıdını tek seferlik uygulayan autostart
@@ -2212,7 +2212,7 @@ echo "İşlem başarıyla tamamlandı!"
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.1.3")
+        self.setWindowTitle("ZelixOS Installer v1.1.4")
         self.setMinimumSize(800, 600)
         self.resize(1024, 720)
 
