@@ -1,11 +1,11 @@
-/* Global Reset and Colors */
+/* Zelix Hello - Monochrome Theme */
 * {
     color: #F0F0F0;
     font-family: 'Noto Sans', 'Inter', 'Ubuntu', 'DejaVu Sans', sans-serif;
 }
 
 QMainWindow {
-    background-color: #161920;
+    background-color: #0E0F12;
 }
 
 /* Headings */
@@ -17,21 +17,22 @@ QLabel#dashboard_title {
 
 QLabel#dashboard_subtitle {
     font-size: 14px;
-    color: #B0B5C0;
+    color: #9E9EA8;
     padding-bottom: 10px;
 }
 
 QLabel#grid_header {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: bold;
-    color: #1A4D8F; /* Navy Blue Highlight */
+    color: #FFFFFF;
     margin-bottom: 5px;
     text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 QLabel#footer_text {
     font-size: 13px;
-    color: #B0B5C0;
+    color: #888892;
 }
 
 QLabel#title_label {
@@ -39,15 +40,15 @@ QLabel#title_label {
     font-weight: bold;
     color: #FFFFFF;
     margin-bottom: 10px;
-    border-bottom: 2px solid #1A4D8F;
-    padding-bottom: 5px;
+    border-bottom: 1px solid #33333A;
+    padding-bottom: 6px;
 }
 
-/* Buttons */
+/* Standard Buttons */
 QPushButton {
-    background-color: #232731;
-    color: #E0E5F0;
-    border: 1px solid #303542;
+    background-color: #1A1B20;
+    color: #E8E8EE;
+    border: 1px solid #2B2C34;
     border-radius: 6px;
     padding: 12px;
     font-size: 13px;
@@ -55,21 +56,23 @@ QPushButton {
 }
 
 QPushButton:hover {
-    background-color: #2A2E39;
-    border: 1px solid #404655;
+    background-color: #24252D;
+    border: 1px solid #444552;
     color: #FFFFFF;
 }
 
 QPushButton:pressed {
-    background-color: #1A4D8F;
-    border: 1px solid #143A6E;
-    color: #FFFFFF;
+    background-color: #FFFFFF;
+    border: 1px solid #FFFFFF;
+    color: #000000;
 }
 
+/* Primary Action Button (Launch Installer) - White Background, Black Text */
 QPushButton#launch_installer_btn {
-    background-color: #1A4D8F; /* Navy Blue Highlight */
-    color: #FFFFFF;
-    border: 1px solid #143A6E;
+    background-color: #FFFFFF;
+    color: #000000;
+    border: 1px solid #FFFFFF;
+    border-radius: 6px;
     width: 220px;
     margin-top: 10px;
     font-weight: bold;
@@ -77,58 +80,76 @@ QPushButton#launch_installer_btn {
 }
 
 QPushButton#launch_installer_btn:hover {
-    background-color: #143A6E;
+    background-color: #E0E0E0;
+    border: 1px solid #E0E0E0;
+    color: #000000;
 }
 
+QPushButton#launch_installer_btn:pressed {
+    background-color: #CCCCCC;
+}
+
+/* Social Icon Buttons */
 QPushButton#social_btn {
     border-radius: 18px;
-    background-color: #232731;
-    border: 1px solid #303542;
+    background-color: #1A1B20;
+    border: 1px solid #2B2C34;
     padding: 6px;
     min-width: 36px;
     min-height: 36px;
     max-width: 36px;
     max-height: 36px;
 }
+
 QPushButton#social_btn:hover {
-    background-color: #1A4D8F;
-    border: 1px solid #4A90E2;
+    background-color: #2E303A;
+    border: 1px solid #FFFFFF;
 }
 
+/* Toggle Button */
 QPushButton#toggle_btn {
-    background-color: #232731;
-    border: 1px solid #303542;
+    background-color: #1A1B20;
+    border: 1px solid #2B2C34;
     border-radius: 12px;
     padding: 4px 16px;
-    color: #B0B5C0;
+    color: #9E9EA8;
 }
+
 QPushButton#toggle_btn:checked {
-    background-color: #1A4D8F; /* Navy Blue Highlight */
-    color: #FFFFFF;
-    border: 1px solid #143A6E;
+    background-color: #FFFFFF;
+    color: #000000;
+    border: 1px solid #FFFFFF;
+    font-weight: bold;
 }
 
 /* ComboBox */
 QComboBox {
-    background-color: #232731;
-    border: 1px solid #303542;
+    background-color: #1A1B20;
+    border: 1px solid #2B2C34;
     border-radius: 6px;
     padding: 8px 12px;
     color: #FFFFFF;
 }
+
+QComboBox:focus {
+    border: 1px solid #FFFFFF;
+}
+
 QComboBox::drop-down {
     border: none;
 }
+
 QComboBox QAbstractItemView {
-    background-color: #232731;
-    border: 1px solid #303542;
-    selection-background-color: #1A4D8F;
+    background-color: #1A1B20;
+    border: 1px solid #33333A;
+    selection-background-color: #FFFFFF;
+    selection-color: #000000;
 }
 
-/* Cards / GroupBoxes for sub-tabs */
+/* GroupBoxes / Cards */
 QGroupBox {
-    background-color: #1D212A;
-    border: 1px solid #2A2E39;
+    background-color: #141519;
+    border: 1px solid #24252D;
     border-radius: 8px;
     margin-top: 20px;
     padding-top: 20px;
@@ -138,27 +159,31 @@ QGroupBox {
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    padding: 0 5px;
+    padding: 0 6px;
     left: 10px;
-    color: #1A4D8F; /* Navy Blue */
-    font-size: 14px;
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: bold;
 }
 
 /* Scrollbars */
 QScrollBar:vertical {
     border: none;
-    background: #161920;
-    width: 10px;
+    background: #0E0F12;
+    width: 8px;
     margin: 0px;
 }
+
 QScrollBar::handle:vertical {
-    background: #303542;
+    background: #2B2C34;
     min-height: 20px;
-    border-radius: 5px;
+    border-radius: 4px;
 }
+
 QScrollBar::handle:vertical:hover {
-    background: #1A4D8F;
+    background: #FFFFFF;
 }
+
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0px;
 }
@@ -169,11 +194,12 @@ QPushButton#back_btn {
     border: none;
     font-size: 14px;
     font-weight: bold;
-    color: #B0B5C0;
+    color: #9E9EA8;
     text-align: left;
     padding: 5px 0px;
 }
+
 QPushButton#back_btn:hover {
-    color: #1A4D8F; /* Navy Blue */
+    color: #FFFFFF;
     background-color: transparent;
 }

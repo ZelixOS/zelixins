@@ -5,51 +5,65 @@ from PyQt6.QtWidgets import (
     QPushButton, QProgressBar, QTextEdit, QLabel
 )
 from PyQt6.QtCore import QProcess, Qt
-from PyQt6.QtGui import QFont, QColor, QTextCursor
+from PyQt6.QtGui import QFont, QColor, QTextCursor, QIcon
 
 class UpdaterWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ZelixOS Updater")
-        self.resize(700, 500)
+        self.setWindowIcon(QIcon("/usr/share/zelix/zelix-icon.png"))
+        self.resize(720, 520)
 
-        # Apply a basic navy blue / dark theme
+        # Monochromatic Minimalist Theme (OLED Black / Pure White)
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #1a2530;
+                background-color: #0E0F12;
             }
             QLabel {
-                color: #ecf0f1;
+                color: #FFFFFF;
+                font-family: 'Segoe UI', 'Noto Sans', sans-serif;
             }
             QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                border-radius: 4px;
+                background-color: #FFFFFF;
+                color: #000000;
+                font-weight: bold;
+                border: 1px solid #FFFFFF;
+                border-radius: 6px;
+                padding: 10px;
+                font-size: 14px;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background-color: #E0E0E0;
+                border: 1px solid #E0E0E0;
+                color: #000000;
+            }
+            QPushButton:pressed {
+                background-color: #CCCCCC;
             }
             QPushButton:disabled {
-                background-color: #7f8c8d;
-                color: #bdc3c7;
+                background-color: #18191E;
+                color: #555560;
+                border: 1px solid #24252C;
             }
             QProgressBar {
-                border: 2px solid #2c3e50;
-                border-radius: 4px;
+                border: 1px solid #282932;
+                border-radius: 6px;
                 text-align: center;
-                color: white;
-                background-color: #2c3e50;
+                color: #FFFFFF;
+                background-color: #16171B;
+                font-weight: bold;
             }
             QProgressBar::chunk {
-                background-color: #2ecc71;
-                width: 20px;
+                background-color: #FFFFFF;
+                border-radius: 4px;
+                margin: 1px;
             }
             QTextEdit {
-                background-color: #0d131a;
-                color: #d4d4d4;
-                border: 1px solid #34495e;
-                border-radius: 4px;
+                background-color: #0A0B0E;
+                color: #D8D8E0;
+                border: 1px solid #202126;
+                border-radius: 6px;
+                padding: 8px;
             }
         """)
 
@@ -57,19 +71,21 @@ class UpdaterWindow(QMainWindow):
         self.setCentralWidget(central_widget)
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(14)
         central_widget.setLayout(layout)
 
         # Title Label
         self.status_label = QLabel("ZelixOS System Updater")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 10px;")
+        self.status_label.setStyleSheet("font-size: 22px; font-weight: bold; margin-bottom: 4px;")
         layout.addWidget(self.status_label)
 
         # Progress Bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setFixedHeight(25)
+        self.progress_bar.setFixedHeight(22)
         layout.addWidget(self.progress_bar)
 
         # Log View
@@ -82,8 +98,7 @@ class UpdaterWindow(QMainWindow):
 
         # Update Button
         self.update_button = QPushButton("Check & Update System")
-        self.update_button.setFixedHeight(40)
-        self.update_button.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self.update_button.setFixedHeight(44)
         self.update_button.clicked.connect(self.start_update)
         layout.addWidget(self.update_button)
 
@@ -94,21 +109,20 @@ class UpdaterWindow(QMainWindow):
         self.progress_bar.setValue(0)
         self.log_view.clear()
         self.status_label.setText("Updating system... Please wait.")
+        self.status_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #FFFFFF; margin-bottom: 4px;")
         
         self.process = QProcess()
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
         self.process.readyReadStandardError.connect(self.handle_stderr)
         self.process.finished.connect(self.process_finished)
 
-        # Run sudo pacman -Syu --noconfirm
+        # Run pkexec pacman -Syu --noconfirm
         self.process.start("pkexec", ["pacman", "-Syu", "--noconfirm"])
 
     def handle_stdout(self):
         data = self.process.readAllStandardOutput()
-        # Handle decoding errors gracefully
         stdout = bytes(data).decode("utf8", errors="replace")
         
-        # Pacman can use carriage returns (\r) to overwrite the current line (e.g., for progress)
         for line in stdout.split('\n'):
             if not line:
                 continue
@@ -125,24 +139,20 @@ class UpdaterWindow(QMainWindow):
         for line in stderr.split('\n'):
             clean_line = line.split('\r')[-1].strip()
             if clean_line:
-                # Append error in red
-                self.log_view.setTextColor(QColor("red"))
+                self.log_view.setTextColor(QColor("#FF5555"))
                 self.log_view.append(clean_line)
-                self.log_view.setTextColor(QColor("#d4d4d4")) # reset color
-                # Scroll to bottom
+                self.log_view.setTextColor(QColor("#D8D8E0"))
                 cursor = self.log_view.textCursor()
                 cursor.movePosition(QTextCursor.MoveOperation.End)
                 self.log_view.setTextCursor(cursor)
 
     def append_log(self, text):
         self.log_view.append(text)
-        # Auto-scroll to bottom
         cursor = self.log_view.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
         self.log_view.setTextCursor(cursor)
 
     def parse_progress(self, text):
-        # Match lines like: ( 1/100) upgrading something...
         match = re.search(r'\(\s*(\d+)/(\d+)\)', text)
         if match:
             current = int(match.group(1))
@@ -150,18 +160,31 @@ class UpdaterWindow(QMainWindow):
             if total > 0:
                 percentage = int((current / total) * 100)
                 self.progress_bar.setValue(percentage)
+                return
+
+        pct_match = re.search(r'(\d{1,3})\s*%', text)
+        if pct_match:
+            pct = int(pct_match.group(1))
+            if 0 <= pct <= 100:
+                self.progress_bar.setValue(pct)
 
     def process_finished(self, exit_code, exit_status):
         self.update_button.setEnabled(True)
-        self.update_button.setText("Update Finished")
         
         if exit_code == 0:
+            self.update_button.setText("Update Finished")
             self.status_label.setText("System update completed successfully!")
             self.progress_bar.setValue(100)
-            self.status_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #2ecc71; margin-bottom: 10px;")
+            self.status_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #FFFFFF; margin-bottom: 4px;")
+        elif exit_code in (126, 127):
+            self.update_button.setText("Retry Update")
+            self.status_label.setText("Authorization was cancelled or denied.")
+            self.status_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #FFAA00; margin-bottom: 4px;")
+            self.append_log("[!] Update cancelled: administrator privileges were not granted.")
         else:
-            self.status_label.setText("Update failed! Please check logs.")
-            self.status_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #e74c3c; margin-bottom: 10px;")
+            self.update_button.setText("Retry Update")
+            self.status_label.setText(f"Update failed (code {exit_code})! Please check logs.")
+            self.status_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #FF5555; margin-bottom: 4px;")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

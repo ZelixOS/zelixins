@@ -130,8 +130,8 @@ JSEOF
 cat <<'WPEOF' > /mnt/zelix_target/etc/xdg/autostart/zelix-firstrun-wallpaper.desktop
 [Desktop Entry]
 Type=Application
-Name=Zelix First Run Wallpaper
-Exec=bash -c 'if [ ! -f "$HOME/.config/.zelix_wallpaper_done" ]; then sleep 2 && (plasma-apply-wallpaperimage "/usr/share/wallpapers/Zelix/minimalistic.png" || true) && touch "$HOME/.config/.zelix_wallpaper_done"; fi'
+Name=Zelix First Run Theme Setup
+Exec=bash -c 'if [ ! -f "$HOME/.config/.zelix_theme_done" ]; then sleep 2 && (plasma-apply-lookandfeel -a org.kde.breezedark.desktop || true) && (plasma-apply-colorscheme BreezeDark || true) && (plasma-apply-wallpaperimage "/usr/share/wallpapers/Zelix/minimalistic.png" || true) && (kwriteconfig6 --file kdeglobals --group General --key AccentColor "255,255,255" || kwriteconfig5 --file kdeglobals --group General --key AccentColor "255,255,255" || true) && touch "$HOME/.config/.zelix_theme_done"; fi'
 Hidden=false
 NoDisplay=true
 X-GNOME-Autostart-enabled=true
@@ -143,7 +143,7 @@ for user_home in /mnt/zelix_target/home/*; do
         user_name=$(basename "$user_home")
         mkdir -p "$user_home/.config"
         cp -rf /mnt/zelix_target/etc/skel/.config/* "$user_home/.config/" 2>/dev/null || true
-        rm -f "$user_home/.config/.zelix_wallpaper_done" 2>/dev/null || true
+        rm -f "$user_home/.config/.zelix_wallpaper_done" "$user_home/.config/.zelix_theme_done" 2>/dev/null || true
         arch-chroot /mnt/zelix_target chown -R "$user_name:$user_name" "/home/$user_name" 2>/dev/null || true
     fi
 done
