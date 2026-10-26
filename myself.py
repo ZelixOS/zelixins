@@ -282,7 +282,7 @@ LANGUAGES = {
 }
 
 # Global language state — pages can access via get_text()
-_current_lang = "tr"
+_current_lang = "en"
 
 
 def get_text(key: str) -> str:
@@ -470,8 +470,8 @@ class WelcomePage(InstallerPage):
         self.lang_label = QLabel()
         self.lang_label.setStyleSheet("color: #9E9EA8; font-size: 14px; margin-right: 8px;")
         self.lang_combo = QComboBox()
-        self.lang_combo.addItem("Türkçe", "tr")
         self.lang_combo.addItem("English", "en")
+        self.lang_combo.addItem("Türkçe", "tr")
         self.lang_combo.setFixedWidth(120)
         self.lang_combo.currentIndexChanged.connect(self._on_lang_changed)
         lang_row.addWidget(self.lang_label)
@@ -2141,14 +2141,31 @@ for (var i = 0; i < allDesktops.length; i++) {{
     d.writeConfig("Image", "/usr/share/wallpapers/Zelix/minimalistic.png");
     d.writeConfig("FillMode", 2);
 }}
+
+var allPanels = panels();
+for (var p = 0; p < allPanels.length; p++) {{
+    var widgets = allPanels[p].widgets();
+    for (var w = 0; w < widgets.length; w++) {{
+        var widget = widgets[w];
+        if (widget.type === "org.kde.plasma.kickoff") {{
+            widget.currentConfigGroup = ["General"];
+            widget.writeConfig("icon", "/usr/share/zelix/zelix-icon.png");
+            widget.writeConfig("useCustomButtonImage", "true");
+        }}
+        if (widget.type === "org.kde.plasma.icontasks") {{
+            widget.currentConfigGroup = ["General"];
+            widget.writeConfig("launchers", "applications:systemsettings.desktop,applications:org.kde.discover.desktop,applications:org.kde.dolphin.desktop,applications:org.kde.konsole.desktop");
+        }}
+    }}
+}}
 JSEOF
 
-    # İlk girişte koyu tema ve duvar kağıdını tek seferlik uygulayan autostart
+    # İlk girişte koyu tema ve duvar kağıdını tek seferlik uygulayan autostart (çalıştıktan sonra kendini siler)
     cat <<'WPEOF' > /mnt/zelix_target/etc/xdg/autostart/zelix-firstrun-wallpaper.desktop
 [Desktop Entry]
 Type=Application
 Name=Zelix First Run Theme Setup
-Exec=bash -c 'if [ ! -f "$HOME/.config/.zelix_theme_done" ]; then sleep 2 && (plasma-apply-lookandfeel -a org.kde.breezedark.desktop || true) && (plasma-apply-colorscheme BreezeDark || true) && (plasma-apply-wallpaperimage "/usr/share/wallpapers/Zelix/minimalistic.png" || true) && (kwriteconfig6 --file kdeglobals --group General --key AccentColor "255,255,255" || kwriteconfig5 --file kdeglobals --group General --key AccentColor "255,255,255" || true) && touch "$HOME/.config/.zelix_theme_done"; fi'
+Exec=bash -c 'sleep 3 && (plasma-apply-lookandfeel -a org.kde.breezedark.desktop || true) && (plasma-apply-colorscheme BreezeDark || true) && (plasma-apply-wallpaperimage "/usr/share/wallpapers/Zelix/minimalistic.png" || true) && (kwriteconfig6 --file kdeglobals --group General --key AccentColor "255,255,255" || kwriteconfig5 --file kdeglobals --group General --key AccentColor "255,255,255" || true); rm -f "$HOME/.config/autostart/zelix-firstrun-wallpaper.desktop" /etc/xdg/autostart/zelix-firstrun-wallpaper.desktop 2>/dev/null || true'
 Hidden=false
 NoDisplay=true
 X-GNOME-Autostart-enabled=true
@@ -2337,6 +2354,16 @@ class MainWindow(QWidget):
             }
             QPushButton#primary_btn:pressed {
                 background-color: #CCCCCC;
+            }
+            QPushButton:disabled {
+                background-color: #111215;
+                color: #444450;
+                border: 1px solid #1C1D24;
+            }
+            QPushButton#primary_btn:disabled {
+                background-color: #1E1F26;
+                color: #555565;
+                border: 1px solid #2A2B35;
             }
         """)
 
