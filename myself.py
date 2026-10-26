@@ -1409,13 +1409,25 @@ class SummaryPage(InstallerPage):
             elif de in ("Hyprland", "bspwm"):
                 base_packages.append("sddm")
 
-        # Add user-selected extra packages (skip flatpak: prefixed ones)
+        # ZelixRepo packages must NOT be passed to archinstall/pacstrap directly,
+        # because archinstall only knows official Arch repos. They will be installed
+        # post-install after zelixrepo is added to pacman.conf.
+        zelixrepo_set = {
+            "yay", "paru", "zelix-hello", "zelix-updater",
+            "mkinitcpio-openswap", "alci-calamares", "calamares",
+            "ckbcomp", "gquick-git", "qrun-code-git"
+        }
+
+        # Add user-selected extra packages (skip flatpak: and zelixrepo packages)
         if extra_packages:
             for pkg in extra_packages:
                 if pkg.startswith("flatpak:"):
                     # Flatpak apps will be installed post-install
                     if "flatpak" not in base_packages:
                         base_packages.append("flatpak")
+                elif pkg in zelixrepo_set:
+                    # Zelixrepo packages will be installed post-install
+                    continue
                 else:
                     base_packages.append(pkg)
 
@@ -1867,6 +1879,15 @@ class InstallProgressPage(InstallerPage):
             return
 
         # Determine root and boot partition paths dynamically using lsblk
+        extra_page = self.main_window.pages[5]
+        selected_pkgs = extra_page.get_selected_packages()
+        zelixrepo_set = {
+            "yay", "paru", "zelix-hello", "zelix-updater",
+            "mkinitcpio-openswap", "alci-calamares", "calamares",
+            "ckbcomp", "gquick-git", "qrun-code-git"
+        }
+        zelix_pkgs_to_install = " ".join([p for p in selected_pkgs if p in zelixrepo_set])
+
         disk_page = self.main_window.pages[3]
         selected_disk_text = disk_page.disk_combo.currentText()
         if not selected_disk_text:
@@ -2047,12 +2068,19 @@ fi
 # arch-chroot ile hedef sistemin içinde çalıştırılır
 # ═══════════════════════════════════════════════════════════════════
 if command -v arch-chroot &>/dev/null; then
-    echo "ZelixOS görsel temaları yapılandırılıyor (GRUB, Plymouth, SDDM, KDE)..."
+    echo "ZelixOS görsel temaları ve ek paketleri yapılandırılıyor..."
 
     # 1. archiso kalıntılarını temizle
     arch-chroot /mnt/zelix_target rm -f /etc/mkinitcpio.conf.d/archiso.conf /etc/mkinitcpio.conf.d/archiso* 2>/dev/null || true
 
-    # 2. mkinitcpio.conf — plymouth hook ile yaz
+    # 2. ZelixRepo ek paketlerini kur (paru, yay vb.)
+    if [ -n "{zelix_pkgs_to_install}" ]; then
+        echo "ZelixRepo ek paketleri yükleniyor: {zelix_pkgs_to_install}..."
+        arch-chroot /mnt/zelix_target pacman -Sy --noconfirm 2>/dev/null || true
+        arch-chroot /mnt/zelix_target pacman -S --noconfirm --needed {zelix_pkgs_to_install} 2>/dev/null || true
+    fi
+
+    # 3. mkinitcpio.conf — plymouth hook ile yaz
     cat <<'MKCEOF' > /mnt/zelix_target/etc/mkinitcpio.conf
 MODULES=()
 BINARIES=()
@@ -2061,7 +2089,7 @@ HOOKS=(base udev plymouth autodetect modconf kms keyboard keymap consolefont blo
 COMPRESSION="zstd"
 MKCEOF
 
-    # 3. Plymouth yapılandırması
+    # 4. Plymouth yapılandırması
     mkdir -p /mnt/zelix_target/etc/plymouth
     cat <<'PLYEOF' > /mnt/zelix_target/etc/plymouth/plymouthd.conf
 [Daemon]
@@ -2071,7 +2099,7 @@ DeviceTimeout=8
 PLYEOF
     arch-chroot /mnt/zelix_target plymouth-set-default-theme -R zelix-aurora 2>/dev/null || arch-chroot /mnt/zelix_target mkinitcpio -P 2>/dev/null || true
 
-    # 4. GRUB tema ve quiet splash yapılandırması
+    # 5. GRUB tema ve quiet splash yapılandırması
     if [ -f "/mnt/zelix_target/etc/default/grub" ]; then
         arch-chroot /mnt/zelix_target mkdir -p /boot/grub/themes/zelix-aurora /usr/share/grub/themes/zelix-aurora 2>/dev/null || true
         arch-chroot /mnt/zelix_target cp -r /usr/share/grub/themes/zelix-aurora/* /boot/grub/themes/zelix-aurora/ 2>/dev/null || true
@@ -2084,7 +2112,7 @@ PLYEOF
         arch-chroot /mnt/zelix_target grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
     fi
 
-    # 5. SDDM tema yapılandırması
+    # 6. SDDM tema yapılandırması
     mkdir -p /mnt/zelix_target/etc/sddm.conf.d
     cat <<'SDDMEOF' > /mnt/zelix_target/etc/sddm.conf
 [Theme]
@@ -2099,12 +2127,39 @@ SDDMEOF2
     arch-chroot /mnt/zelix_target systemctl enable sddm.service 2>/dev/null || true
     arch-chroot /mnt/zelix_target systemctl set-default graphical.target 2>/dev/null || true
 
-    # 6. KDE koyu tema — skel'den tüm kullanıcılara kopyala
+    # 7. KDE Duvar Kağıdı (minimalistic.png) ve Koyu Tema
+    mkdir -p /mnt/zelix_target/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates
+    mkdir -p /mnt/zelix_target/etc/xdg/autostart
+
+    # Plasma ilk başlatma update betiği
+    cat <<'JSEOF' > /mnt/zelix_target/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/00-zelix-wallpaper.js
+var allDesktops = desktops();
+for (var i = 0; i < allDesktops.length; i++) {
+    var d = allDesktops[i];
+    d.wallpaperPlugin = "org.kde.image";
+    d.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
+    d.writeConfig("Image", "/usr/share/wallpapers/Zelix/minimalistic.png");
+    d.writeConfig("FillMode", 2);
+}
+JSEOF
+
+    # İlk girişte duvar kağıdını tek seferlik uygulayan autostart
+    cat <<'WPEOF' > /mnt/zelix_target/etc/xdg/autostart/zelix-firstrun-wallpaper.desktop
+[Desktop Entry]
+Type=Application
+Name=Zelix First Run Wallpaper
+Exec=bash -c 'if [ ! -f "$HOME/.config/.zelix_wallpaper_done" ]; then sleep 2 && (plasma-apply-wallpaperimage "/usr/share/wallpapers/Zelix/minimalistic.png" || true) && touch "$HOME/.config/.zelix_wallpaper_done"; fi'
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+WPEOF
+
     for user_home in /mnt/zelix_target/home/*/; do
         if [ -d "$user_home" ]; then
             user_name=$(basename "$user_home")
             mkdir -p "$user_home/.config"
-            cp -rn /mnt/zelix_target/etc/skel/.config/* "$user_home/.config/" 2>/dev/null || true
+            cp -rf /mnt/zelix_target/etc/skel/.config/* "$user_home/.config/" 2>/dev/null || true
+            rm -f "$user_home/.config/.zelix_wallpaper_done" 2>/dev/null || true
             arch-chroot /mnt/zelix_target chown -R "$user_name:$user_name" "/home/$user_name" 2>/dev/null || true
         fi
     done
@@ -2157,7 +2212,7 @@ echo "İşlem başarıyla tamamlandı!"
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.1.1")
+        self.setWindowTitle("ZelixOS Installer v1.1.2")
         self.setMinimumSize(800, 600)
         self.resize(1024, 720)
 

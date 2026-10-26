@@ -112,14 +112,38 @@ if command -v arch-chroot &>/dev/null; then
     arch-chroot /mnt/zelix_target systemctl set-default graphical.target 2>/dev/null || true
 fi
 
-# 6. KDE Koyu Mavi Tema & Duvar Kağıdının Kullanıcılara Uygulanması
+# 6. KDE Duvar Kağıdı (minimalistic.png) & Koyu Tema
+mkdir -p /mnt/zelix_target/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates
+mkdir -p /mnt/zelix_target/etc/xdg/autostart
+
+cat <<'JSEOF' > /mnt/zelix_target/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/00-zelix-wallpaper.js
+var allDesktops = desktops();
+for (var i = 0; i < allDesktops.length; i++) {
+    var d = allDesktops[i];
+    d.wallpaperPlugin = "org.kde.image";
+    d.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
+    d.writeConfig("Image", "/usr/share/wallpapers/Zelix/minimalistic.png");
+    d.writeConfig("FillMode", 2);
+}
+JSEOF
+
+cat <<'WPEOF' > /mnt/zelix_target/etc/xdg/autostart/zelix-firstrun-wallpaper.desktop
+[Desktop Entry]
+Type=Application
+Name=Zelix First Run Wallpaper
+Exec=bash -c 'if [ ! -f "$HOME/.config/.zelix_wallpaper_done" ]; then sleep 2 && (plasma-apply-wallpaperimage "/usr/share/wallpapers/Zelix/minimalistic.png" || true) && touch "$HOME/.config/.zelix_wallpaper_done"; fi'
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+WPEOF
+
 chmod 644 /mnt/zelix_target/etc/skel/.config/* 2>/dev/null || true
 for user_home in /mnt/zelix_target/home/*; do
     if [ -d "$user_home" ]; then
         user_name=$(basename "$user_home")
         mkdir -p "$user_home/.config"
-        cp -rn /mnt/zelix_target/etc/skel/.config/* "$user_home/.config/" 2>/dev/null || true
-        cp -f /mnt/zelix_target/etc/skel/.config/kdeglobals "$user_home/.config/kdeglobals" 2>/dev/null || true
+        cp -rf /mnt/zelix_target/etc/skel/.config/* "$user_home/.config/" 2>/dev/null || true
+        rm -f "$user_home/.config/.zelix_wallpaper_done" 2>/dev/null || true
         arch-chroot /mnt/zelix_target chown -R "$user_name:$user_name" "/home/$user_name" 2>/dev/null || true
     fi
 done

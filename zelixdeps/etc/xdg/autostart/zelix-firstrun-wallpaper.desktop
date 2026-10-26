@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Zelix First Run Wallpaper
+Exec=bash -c 'if [ ! -f "/home/yasir/.config/.zelix_wallpaper_done" ]; then sleep 2 && (plasma-apply-wallpaperimage "/usr/share/wallpapers/Zelix/minimalistic.png" || true) && touch "/home/yasir/.config/.zelix_wallpaper_done"; fi'
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
