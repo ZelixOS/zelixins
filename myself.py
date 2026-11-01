@@ -1772,7 +1772,7 @@ class InstallProgressPage(InstallerPage):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.2.0")
+        self.setWindowTitle("ZelixOS Installer v1.2.1")
         for icon_candidate in (
             "/usr/share/zelix/zelix-installer.png",
             "/usr/share/pixmaps/zelix-installer.png",
