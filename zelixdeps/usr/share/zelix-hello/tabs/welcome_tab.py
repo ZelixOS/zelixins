@@ -2,7 +2,8 @@ import platform
 import subprocess
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, 
                              QPushButton, QGroupBox, QGridLayout)
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtGui import QDesktopServices
 
 class WelcomeTab(QWidget):
     def __init__(self):
@@ -58,11 +59,17 @@ class WelcomeTab(QWidget):
         links_layout = QHBoxLayout(links_group)
         
         btn_wiki = QPushButton("Wiki")
-        btn_forum = QPushButton("Forum")
-        btn_discord = QPushButton("Discord")
-        btn_github = QPushButton("GitHub")
+        btn_wiki.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://docs.zelixos.com")))
         
-        # In a real app, these would open QDesktopServices.openUrl()
+        btn_forum = QPushButton("Forum")
+        btn_forum.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://forum.zelixos.org")))
+        
+        btn_discord = QPushButton("Discord")
+        btn_discord.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://discord.gg/zelixos")))
+        
+        btn_github = QPushButton("GitHub")
+        btn_github.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS")))
+        
         links_layout.addWidget(btn_wiki)
         links_layout.addWidget(btn_forum)
         links_layout.addWidget(btn_discord)

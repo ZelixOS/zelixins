@@ -42,24 +42,36 @@ class AppsTab(QWidget):
         
         self.categories = [
             {
+                "key": "cat_aur",
+                "is_aur": True,
+                "apps": [
+                    ("Yay", "yay"),
+                    ("Paru", "paru")
+                ],
+                "extra_deps": ""
+            },
+            {
                 "key": "cat_gaming",
                 "apps": [
-                    ("RetroArch", "retroarch"),
+                    ("Steam", "steam"),
                     ("Lutris", "lutris"),
-                    ("ProtonTricks", "protontricks"),
-                    ("MangoHud", "mangohud"),
+                    ("RetroArch", "retroarch"),
                     ("Wine", "wine"),
-                    ("Steam", "steam")
+                    ("Winetricks", "winetricks"),
+                    ("MangoHud", "mangohud"),
+                    ("GameMode", "gamemode"),
+                    ("ProtonTricks", "protontricks")
                 ],
-                "extra_deps": "gamemode gamescope wine-staging winetricks vulkan-radeon vulkan-intel vulkan-icd-loader"
+                "extra_deps": "gamescope vulkan-radeon vulkan-intel vulkan-icd-loader"
             },
             {
                 "key": "cat_office",
                 "apps": [
                     ("LibreOffice", "libreoffice-fresh"),
+                    ("Thunderbird", "thunderbird"),
                     ("Okular", "okular"),
-                    ("Calligra", "calligra"),
-                    ("Thunderbird", "thunderbird")
+                    ("Xournal++", "xournalpp"),
+                    ("KeePassXC", "keepassxc")
                 ],
                 "extra_deps": ""
             },
@@ -69,9 +81,11 @@ class AppsTab(QWidget):
                     ("Kdenlive", "kdenlive"),
                     ("OBS Studio", "obs-studio"),
                     ("GIMP", "gimp"),
+                    ("Inkscape", "inkscape"),
                     ("Blender", "blender"),
                     ("VLC", "vlc"),
-                    ("Audacity", "audacity")
+                    ("Audacity", "audacity"),
+                    ("MPV", "mpv")
                 ],
                 "extra_deps": ""
             },
@@ -80,10 +94,10 @@ class AppsTab(QWidget):
                 "apps": [
                     ("Firefox", "firefox"),
                     ("Chromium", "chromium"),
-                    ("Falkon", "falkon"),
                     ("Telegram", "telegram-desktop"),
                     ("Discord", "discord"),
-                    ("Spotify", "spotify-launcher")
+                    ("Spotify", "spotify-launcher"),
+                    ("Falkon", "falkon")
                 ],
                 "extra_deps": ""
             },
@@ -92,6 +106,8 @@ class AppsTab(QWidget):
                 "apps": [
                     ("VS Code", "code"),
                     ("Neovim", "neovim"),
+                    ("Git", "git"),
+                    ("Docker", "docker"),
                     ("FileZilla", "filezilla"),
                     ("VirtualBox", "virtualbox")
                 ],
@@ -115,11 +131,13 @@ class AppsTab(QWidget):
             apps_list = cat_info["apps"]
             extra_deps = cat_info["extra_deps"]
             
-            all_pkgs = " ".join([pkg for _, pkg in apps_list])
-            if extra_deps:
-                all_pkgs += " " + extra_deps
-                
-            btn_install_all.clicked.connect(lambda checked, pkgs=all_pkgs: self.install_app(pkgs))
+            if cat_info.get("is_aur"):
+                btn_install_all.clicked.connect(self.install_all_aur)
+            else:
+                all_pkgs = " ".join([pkg for _, pkg in apps_list])
+                if extra_deps:
+                    all_pkgs += " " + extra_deps
+                btn_install_all.clicked.connect(lambda checked, pkgs=all_pkgs: self.install_app(pkgs))
             
             cat_widget_entry = {
                 "key": cat_key,
@@ -133,7 +151,10 @@ class AppsTab(QWidget):
             row, col = 1, 0
             for app_name, pkg_name in apps_list:
                 btn = QPushButton()
-                btn.clicked.connect(lambda checked, pkg=pkg_name: self.install_app(pkg))
+                if cat_info.get("is_aur"):
+                    btn.clicked.connect(lambda checked, pkg=pkg_name: self.install_aur_helper(pkg))
+                else:
+                    btn.clicked.connect(lambda checked, pkg=pkg_name: self.install_app(pkg))
                 grid.addWidget(btn, row, col)
                 
                 cat_widget_entry["app_btns"].append((btn, app_name))
@@ -164,28 +185,90 @@ class AppsTab(QWidget):
             for btn, app_name in cat_data["app_btns"]:
                 btn.setText(f"{app_name} {install_text}")
 
-    def install_app(self, packages):
+    def get_terminal_cmd(self):
         terminals = [
             ("alacritty", ["alacritty", "-e"]),
-            ("konsole", ["konsole", "-e"]),
+            ("konsole", ["konsole", "--hold", "-e"]),
             ("gnome-terminal", ["gnome-terminal", "--"]),
             ("xfce4-terminal", ["xfce4-terminal", "-e"]),
-            ("kitty", ["kitty", "--"]),
-            ("xterm", ["xterm", "-e"])
+            ("kitty", ["kitty", "--hold", "--"]),
+            ("foot", ["foot", "-e"]),
+            ("xterm", ["xterm", "-hold", "-e"])
         ]
         
-        selected_term = None
         for term_name, term_cmd in terminals:
             if shutil.which(term_name):
-                selected_term = term_cmd
-                break
-                
-        if not selected_term:
+                return term_cmd
+        return None
+
+    def install_app(self, packages):
+        term_cmd = self.get_terminal_cmd()
+        if not term_cmd:
             QMessageBox.warning(self, Translator.get("msg_error"), Translator.get("msg_unsupported_term"))
             return
             
-        command = selected_term + ["sudo", "pacman", "-S"] + packages.split()
+        pkgs_str = " ".join(packages.split())
+        shell_script = f"sudo pacman -S --needed {pkgs_str}; echo ''; read -r -p 'İşlem tamamlandı. Kapatmak için Enter tuşuna basın...' dummy"
+        command = term_cmd + ["bash", "-c", shell_script]
         try:
             subprocess.Popen(command)
         except Exception as e:
             QMessageBox.warning(self, Translator.get("msg_error"), f"{Translator.get('msg_term_fail')} {e}")
+
+    def install_aur_helper(self, helper):
+        term_cmd = self.get_terminal_cmd()
+        if not term_cmd:
+            QMessageBox.warning(self, Translator.get("msg_error"), Translator.get("msg_unsupported_term"))
+            return
+
+        shell_script = (
+            f"echo '=== ZelixOS: {helper} AUR Yardımcısı Kurulumu ==='; "
+            f"if pacman -Si '{helper}' &>/dev/null; then "
+            f"    echo 'Paket depoda bulundu, pacman ile kuruluyor...'; "
+            f"    sudo pacman -S --needed '{helper}'; "
+            f"else "
+            f"    echo 'Paket depolarda bulunamadı, AUR üzerinden derlenip kuruluyor...'; "
+            f"    sudo pacman -S --needed --noconfirm base-devel git; "
+            f"    TMPDIR=$(mktemp -d); "
+            f"    git clone 'https://aur.archlinux.org/{helper}-bin.git' \"$TMPDIR/{helper}\" || "
+            f"    git clone 'https://aur.archlinux.org/{helper}.git' \"$TMPDIR/{helper}\"; "
+            f"    (cd \"$TMPDIR/{helper}\" && makepkg -si --noconfirm); "
+            f"    rm -rf \"$TMPDIR\"; "
+            f"fi; "
+            f"echo ''; read -r -p 'Kurulum tamamlandı. Kapatmak için Enter tuşuna basın...' dummy"
+        )
+        command = term_cmd + ["bash", "-c", shell_script]
+        try:
+            subprocess.Popen(command)
+        except Exception as e:
+            QMessageBox.warning(self, Translator.get("msg_error"), f"{Translator.get('msg_term_fail')} {e}")
+
+    def install_all_aur(self):
+        term_cmd = self.get_terminal_cmd()
+        if not term_cmd:
+            QMessageBox.warning(self, Translator.get("msg_error"), Translator.get("msg_unsupported_term"))
+            return
+
+        shell_script = (
+            "echo '=== ZelixOS: yay ve paru AUR Yardımcıları Kurulumu ==='; "
+            "for h in yay paru; do "
+            "    echo ''; echo \"--- $h Kuruluyor ---\"; "
+            "    if pacman -Si \"$h\" &>/dev/null; then "
+            "        sudo pacman -S --needed --noconfirm \"$h\"; "
+            "    else "
+            "        sudo pacman -S --needed --noconfirm base-devel git; "
+            "        TMPDIR=$(mktemp -d); "
+            "        git clone \"https://aur.archlinux.org/${h}-bin.git\" \"$TMPDIR/$h\" || "
+            "        git clone \"https://aur.archlinux.org/${h}.git\" \"$TMPDIR/$h\"; "
+            "        (cd \"$TMPDIR/$h\" && makepkg -si --noconfirm); "
+            "        rm -rf \"$TMPDIR\"; "
+            "    fi; "
+            "done; "
+            "echo ''; read -r -p 'Tüm kurulumlar tamamlandı. Kapatmak için Enter tuşuna basın...' dummy"
+        )
+        command = term_cmd + ["bash", "-c", shell_script]
+        try:
+            subprocess.Popen(command)
+        except Exception as e:
+            QMessageBox.warning(self, Translator.get("msg_error"), f"{Translator.get('msg_term_fail')} {e}")
+

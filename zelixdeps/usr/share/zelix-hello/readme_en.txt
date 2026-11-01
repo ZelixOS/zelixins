@@ -6,14 +6,17 @@ ZelixOS is a modern, reliable, and user-friendly operating system
 based on Arch Linux. Below you will find essential information to
 help you get the most out of your new operating system.
 
-1. Package Management
+1. Package Management & AUR (Arch User Repository)
 ----------------------------------------------------------------------
 ZelixOS uses 'pacman' as its primary package manager.
+You can also install popular AUR helpers like 'yay' and 'paru'
+with a single click via "Zelix Hello" or use them in terminal.
+
 * To update the system:
-  sudo pacman -Syu   (or simply: zelix update)
+  sudo pacman -Syu  (or with AUR: yay -Syu / paru -Syu)
 
 * To install a new package/software:
-  sudo pacman -S package_name
+  sudo pacman -S package_name  (or with AUR: yay -S package_name)
 
 * To remove a package and its unused dependencies:
   sudo pacman -Rns package_name
@@ -38,11 +41,11 @@ NOTE: 'Super' refers to the Windows key on your keyboard.
 3. Important Links & Support
 ----------------------------------------------------------------------
 * Official Website: https://zelixos.com
+* Release Notes: https://zelixos.com/release-aurora.html
 * Wiki & Documentation: https://docs.zelixos.com
 * GitHub Organization: https://github.com/ZelixOS
-* Community Forum: https://forum.zelixos.org
-* Discord Server: https://discord.gg/zelixos
 * Telegram Community: https://t.me/zelixos
+* Discord Server: https://discord.gg/zelixos
 
 You can continue using the tabs in the "Zelix Hello" application
 to customize your desktop experience, install popular applications,

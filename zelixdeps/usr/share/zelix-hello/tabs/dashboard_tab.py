@@ -3,7 +3,8 @@ import shutil
 import subprocess
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, 
                              QPushButton, QGridLayout, QComboBox, QSpacerItem, 
-                             QSizePolicy, QDialog, QTableWidget, QTableWidgetItem, QHeaderView)
+                             QSizePolicy, QDialog, QTableWidget, QTableWidgetItem, QHeaderView,
+                             QPlainTextEdit)
 from PyQt6.QtCore import Qt, QUrl, QSize
 from PyQt6.QtGui import QDesktopServices, QIcon
 from utils.translations import Translator
@@ -17,6 +18,99 @@ def get_asset_icon(name):
     if os.path.exists(system_path):
         return QIcon(system_path)
     return QIcon()
+
+class ReadmeDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(Translator.get("readme_title"))
+        self.setMinimumSize(680, 520)
+        self.resize(750, 580)
+        self.current_lang = "tr" if "turkish" in Translator.get_language().lower() else "en"
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        header_layout = QHBoxLayout()
+        title = QLabel(Translator.get("readme_title"))
+        title.setObjectName("title_label")
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+
+        self.btn_lang = QPushButton()
+        self.btn_lang.setObjectName("primary_btn")
+        self.btn_lang.setFixedWidth(150)
+        self.btn_lang.clicked.connect(self.toggle_language)
+        header_layout.addWidget(self.btn_lang)
+        layout.addLayout(header_layout)
+
+        self.text_view = QPlainTextEdit()
+        self.text_view.setReadOnly(True)
+        self.text_view.setStyleSheet(
+            "background-color: #1e1e2e; color: #cdd6f4; "
+            "font-family: monospace; font-size: 13px; "
+            "border-radius: 8px; padding: 10px;"
+        )
+        layout.addWidget(self.text_view)
+
+        bottom_layout = QHBoxLayout()
+        self.btn_external = QPushButton(Translator.get("readme_open_ext"))
+        self.btn_external.clicked.connect(self.open_external)
+        bottom_layout.addWidget(self.btn_external)
+        bottom_layout.addStretch()
+
+        btn_close = QPushButton(Translator.get("btn_close"))
+        btn_close.setObjectName("launch_installer_btn")
+        btn_close.clicked.connect(self.accept)
+        bottom_layout.addWidget(btn_close)
+
+        layout.addLayout(bottom_layout)
+        self.update_content()
+
+    def get_readme_path(self, lang):
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if lang == "tr":
+            filenames = ["readme_tr.txt", "readme.txt"]
+        else:
+            filenames = ["readme_en.txt", "readme.txt"]
+            
+        for fn in filenames:
+            local = os.path.join(app_dir, fn)
+            if os.path.exists(local):
+                return local
+            system = os.path.join("/usr/share/zelix-hello", fn)
+            if os.path.exists(system):
+                return system
+        return None
+
+    def update_content(self):
+        if self.current_lang == "tr":
+            self.btn_lang.setText("English 🇬🇧")
+        else:
+            self.btn_lang.setText("Türkçe 🇹🇷")
+
+        path = self.get_readme_path(self.current_lang)
+        if path and os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    self.text_view.setPlainText(f.read())
+            except Exception as e:
+                self.text_view.setPlainText(f"Hata: {e}")
+        else:
+            self.text_view.setPlainText("Readme dosyası bulunamadı / Readme file not found.")
+
+    def toggle_language(self):
+        self.current_lang = "en" if self.current_lang == "tr" else "tr"
+        self.update_content()
+
+    def open_external(self):
+        path = self.get_readme_path(self.current_lang)
+        if path and os.path.exists(path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+        else:
+            QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS"))
 
 class ShortcutsDialog(QDialog):
     def __init__(self, parent=None):
@@ -236,7 +330,7 @@ class DashboardTab(QWidget):
         self.btn_readme.clicked.connect(self.open_readme)
         self.btn_wiki.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://docs.zelixos.com")))
         self.btn_forum.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://forum.zelixos.org")))
-        self.btn_release_info.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS/releases")))
+        self.btn_release_info.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://zelixos.com/release-aurora.html")))
         self.btn_get_involved.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS")))
         self.btn_development.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS")))
         self.btn_donate.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://zelixos.com/")))
@@ -252,29 +346,8 @@ class DashboardTab(QWidget):
         dialog.exec()
 
     def open_readme(self):
-        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        current_lang = Translator.get_language().lower()
-        
-        if "turkish" in current_lang:
-            filenames = ["readme_tr.txt", "readme.txt"]
-        else:
-            filenames = ["readme_en.txt", "readme.txt"]
-            
-        readme_path = None
-        for fn in filenames:
-            local_candidate = os.path.join(app_dir, fn)
-            if os.path.exists(local_candidate):
-                readme_path = local_candidate
-                break
-            system_candidate = os.path.join("/usr/share/zelix-hello", fn)
-            if os.path.exists(system_candidate):
-                readme_path = system_candidate
-                break
-                
-        if readme_path and os.path.exists(readme_path):
-            QDesktopServices.openUrl(QUrl.fromLocalFile(readme_path))
-        else:
-            QDesktopServices.openUrl(QUrl("https://github.com/ZelixOS/blob/main/README.md"))
+        dialog = ReadmeDialog(self)
+        dialog.exec()
 
     def change_language(self, lang):
         Translator.set_language(lang)
