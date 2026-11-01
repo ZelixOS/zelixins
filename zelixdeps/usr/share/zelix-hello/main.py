@@ -5,7 +5,7 @@ from ui.main_window import MainWindow
 
 def main():
     app = QApplication(sys.argv)
-    
+
     # Load stylesheet — gracefully handle missing or inaccessible files
     style_path = os.path.join(os.path.dirname(__file__), "ui", "styles.qss")
     try:
@@ -14,10 +14,10 @@ def main():
                 app.setStyleSheet(f.read())
     except (OSError, PermissionError) as e:
         print(f"[Warning] Could not load stylesheet: {e}")
-            
+
     window = MainWindow()
     window.show()
-    
+
     sys.exit(app.exec())
 
 if __name__ == "__main__":

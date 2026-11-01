@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=Zelix First Run Theme Setup
-Exec=bash -c 'sleep 3 && (plasma-apply-lookandfeel -a org.kde.breezedark.desktop || true) && (plasma-apply-colorscheme BreezeDark || true) && (plasma-apply-wallpaperimage "/usr/share/wallpapers/Zelix/minimalistic.png" || true) && (kwriteconfig6 --file kdeglobals --group General --key AccentColor "255,255,255" || kwriteconfig5 --file kdeglobals --group General --key AccentColor "255,255,255" || true); rm -f "$HOME/.config/autostart/zelix-firstrun-wallpaper.desktop" /etc/xdg/autostart/zelix-firstrun-wallpaper.desktop 2>/dev/null || true'
-Hidden=false
+Name=Zelix Aurora First Login Setup
+Exec=/usr/local/bin/zelix-first-login
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
 NoDisplay=true
-X-GNOME-Autostart-enabled=true

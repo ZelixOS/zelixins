@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QGroupBox, 
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QGroupBox,
                              QGridLayout, QPushButton, QMessageBox, QScrollArea, QHBoxLayout)
 from PyQt6.QtCore import Qt
 import subprocess
@@ -12,11 +12,11 @@ class AppsTab(QWidget):
         self.category_widgets = []
         self._init_ui()
         Translator.add_listener(self)
-        
+
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(20, 20, 20, 20)
-        
+
         # Header with back button
         header_layout = QHBoxLayout()
         self.btn_back = QPushButton()
@@ -25,21 +25,21 @@ class AppsTab(QWidget):
         header_layout.addWidget(self.btn_back)
         header_layout.addStretch()
         main_layout.addLayout(header_layout)
-        
+
         self.title = QLabel()
         self.title.setObjectName("title_label")
         main_layout.addWidget(self.title)
-        
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setStyleSheet("background-color: transparent;")
-        
+
         scroll_widget = QWidget()
         layout = QVBoxLayout(scroll_widget)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.setSpacing(25)
-        
+
         self.categories = [
             {
                 "key": "cat_aur",
@@ -114,23 +114,23 @@ class AppsTab(QWidget):
                 "extra_deps": ""
             }
         ]
-        
+
         self.category_widgets = []
-        
+
         for cat_info in self.categories:
             cat_key = cat_info["key"]
             group = QGroupBox()
             grid = QGridLayout(group)
             grid.setSpacing(15)
             grid.setContentsMargins(20, 30, 20, 20)
-            
+
             # Install All button
             btn_install_all = QPushButton()
             btn_install_all.setObjectName("primary_btn")
-            
+
             apps_list = cat_info["apps"]
             extra_deps = cat_info["extra_deps"]
-            
+
             if cat_info.get("is_aur"):
                 btn_install_all.clicked.connect(self.install_all_aur)
             else:
@@ -138,16 +138,16 @@ class AppsTab(QWidget):
                 if extra_deps:
                     all_pkgs += " " + extra_deps
                 btn_install_all.clicked.connect(lambda checked, pkgs=all_pkgs: self.install_app(pkgs))
-            
+
             cat_widget_entry = {
                 "key": cat_key,
                 "group": group,
                 "btn_install_all": btn_install_all,
                 "app_btns": []
             }
-            
+
             grid.addWidget(btn_install_all, 0, 0, 1, 3)
-            
+
             row, col = 1, 0
             for app_name, pkg_name in apps_list:
                 btn = QPushButton()
@@ -156,29 +156,29 @@ class AppsTab(QWidget):
                 else:
                     btn.clicked.connect(lambda checked, pkg=pkg_name: self.install_app(pkg))
                 grid.addWidget(btn, row, col)
-                
+
                 cat_widget_entry["app_btns"].append((btn, app_name))
-                
+
                 col += 1
                 if col > 2:
                     col = 0
                     row += 1
-                    
+
             self.category_widgets.append(cat_widget_entry)
             layout.addWidget(group)
-            
+
         scroll.setWidget(scroll_widget)
         main_layout.addWidget(scroll)
-        
+
         self.retranslate_ui()
 
     def retranslate_ui(self):
         self.btn_back.setText(Translator.get("btn_back"))
         self.title.setText(Translator.get("apps_title"))
-        
+
         install_text = Translator.get("btn_install")
         install_all_text = Translator.get("btn_install_all")
-        
+
         for cat_data in self.category_widgets:
             cat_data["group"].setTitle(Translator.get(cat_data["key"]))
             cat_data["btn_install_all"].setText(install_all_text)
@@ -195,7 +195,7 @@ class AppsTab(QWidget):
             ("foot", ["foot", "-e"]),
             ("xterm", ["xterm", "-hold", "-e"])
         ]
-        
+
         for term_name, term_cmd in terminals:
             if shutil.which(term_name):
                 return term_cmd
@@ -206,7 +206,7 @@ class AppsTab(QWidget):
         if not term_cmd:
             QMessageBox.warning(self, Translator.get("msg_error"), Translator.get("msg_unsupported_term"))
             return
-            
+
         pkgs_str = " ".join(packages.split())
         shell_script = f"sudo pacman -S --needed {pkgs_str}; echo ''; read -r -p 'İşlem tamamlandı. Kapatmak için Enter tuşuna basın...' dummy"
         command = term_cmd + ["bash", "-c", shell_script]
@@ -271,4 +271,3 @@ class AppsTab(QWidget):
             subprocess.Popen(command)
         except Exception as e:
             QMessageBox.warning(self, Translator.get("msg_error"), f"{Translator.get('msg_term_fail')} {e}")
-

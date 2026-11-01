@@ -1,167 +1,131 @@
 #!/bin/bash
-set -x
-
-ROOT_PART=$1
-DEPS_PATH=$2
-
-if [ -z "$ROOT_PART" ] || [ -z "$DEPS_PATH" ]; then
-    echo "Hata: Hedef disk veya deps klasörü belirtilmedi!"
-    exit 1
+# Called only after archinstall succeeds. Arguments are passed as an argv list.
+set -Eeuo pipefail
+if (( $# < 8 )); then
+    echo 'Usage: postinstall ROOT BOOT HOME_OR_DASH DEPS DESKTOP GREETER BOOTLOADER MULTILIB [PACKAGES...]' >&2
+    exit 2
 fi
+ROOT_PART=$1 BOOT_PART=$2 HOME_PART=$3 DEPS_PATH=$4
+DESKTOP=$5 GREETER=$6 BOOTLOADER=$7 MULTILIB=$8
+shift 8
+[[ $EUID == 0 && -d "$DEPS_PATH" ]] || exit 2
+case "$GREETER" in sddm|gdm|lightdm-gtk-greeter|ly) ;; *) exit 2;; esac
+case "$MULTILIB" in true|false) ;; *) exit 2;; esac
+for device in "$ROOT_PART" "$BOOT_PART"; do [[ -b $device ]] || exit 2; done
+[[ $HOME_PART == - || -b $HOME_PART ]] || exit 2
+TARGET=$(mktemp -d /mnt/zelix-target.XXXXXXXX)
+cleanup() {
+    local result=$?
+    trap - EXIT
+    for path in "$TARGET/home" "$TARGET/boot" "$TARGET"; do
+        if mountpoint -q "$path"; then
+            if ! umount "$path"; then echo "ERROR: cannot unmount $path" >&2; result=1; fi
+        fi
+    done
+    rmdir "$TARGET" 2>/dev/null || true
+    exit "$result"
+}
+trap cleanup EXIT
+trap 'echo "ERROR: post-install failed at line $LINENO" >&2' ERR
+mount "$ROOT_PART" "$TARGET"
+[[ -d $TARGET/etc && -d $TARGET/usr ]]
+mkdir -p "$TARGET/boot" "$TARGET/home"
+mount "$BOOT_PART" "$TARGET/boot"
+if [[ $HOME_PART != - ]]; then mount "$HOME_PART" "$TARGET/home"; fi
 
-echo "Hedef Disk: $ROOT_PART dizinine bağlanılıyor..."
-mkdir -p /mnt/zelix_target
-mount "$ROOT_PART" /mnt/zelix_target
-
-# BTRFS @ alt hacmi kontrolü
-if [ -d "/mnt/zelix_target/@/etc" ]; then
-    echo "BTRFS @ alt hacmi algılandı, kök bağlanıyor..."
-    umount /mnt/zelix_target
-    mount -o subvol=@ "$ROOT_PART" /mnt/zelix_target
+# Copy common assets without leaking KDE and SDDM defaults into other desktops.
+for path in "$DEPS_PATH"/*; do
+    [[ $(basename "$path") == etc || $(basename "$path") == boot ]] && continue
+    cp -a "$path" "$TARGET/"
+done
+mkdir -p "$TARGET/etc/xdg/autostart"
+install -m644 "$DEPS_PATH/etc/xdg/autostart/zelix-hello.desktop" "$TARGET/etc/xdg/autostart/"
+if [[ $GREETER == sddm ]]; then
+    mkdir -p "$TARGET/etc/sddm.conf.d"
+    cp -a "$DEPS_PATH/etc/sddm.conf" "$TARGET/etc/"
+    cp -a "$DEPS_PATH/etc/sddm.conf.d/." "$TARGET/etc/sddm.conf.d/"
 fi
-
-echo "ZelixOS Aurora özel dosyaları (duvar kağıtları, ikonlar, temalar) kopyalanıyor..."
-cp -ar "$DEPS_PATH"/* /mnt/zelix_target/
-
-# 1. İşletim sistemi kimliği (os-release)
-cat << 'OS_EOF' > /mnt/zelix_target/etc/os-release
+if [[ $DESKTOP == 'KDE Plasma' ]]; then
+    mkdir -p "$TARGET/etc/skel/.config"
+    cp -a "$DEPS_PATH/etc/skel/.config/." "$TARGET/etc/skel/.config/"
+    install -m644 "$DEPS_PATH/etc/xdg/autostart/zelix-firstrun-wallpaper.desktop" "$TARGET/etc/xdg/autostart/"
+    while IFS=: read -r user _ uid gid _ home _; do
+        if (( uid >= 1000 && uid < 65534 )) && [[ $home == /home/* && -d $TARGET$home ]]; then
+            mkdir -p "$TARGET$home/.config"
+            cp -a "$TARGET/etc/skel/.config/." "$TARGET$home/.config/"
+            chown -R "$uid:$gid" "$TARGET$home/.config"
+        fi
+    done < "$TARGET/etc/passwd"
+else
+    # Plasma update scripts must not overwrite a future, manually installed KDE session.
+    rm -f "$TARGET/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/00-zelix-wallpaper.js"
+fi
+cat > "$TARGET/etc/os-release" <<'EOF'
 NAME="ZelixOS"
 PRETTY_NAME="ZelixOS Aurora"
 ID=zelixos
 ID_LIKE=arch
 BUILD_ID=rolling
-ANSI_COLOR="0;34"
 HOME_URL="https://zelixos.com"
-DOCUMENTATION_URL="https://docs.zelixos.com"
-SUPPORT_URL="https://zelixos.com"
-BUG_REPORT_URL="https://zelixos.com/br.html"
 LOGO=/usr/share/zelix/zelix-icon.png
-OS_EOF
-
-echo -e "\e[1;34mZelixOS Aurora\e[0m \r (\l)\n" > /mnt/zelix_target/etc/issue
-cat << 'LSB_EOF' > /mnt/zelix_target/etc/lsb-release
-LSB_VERSION=1.4
-DISTRIB_ID=ZelixOS
-DISTRIB_RELEASE=rolling
-DISTRIB_DESCRIPTION="ZelixOS Aurora"
-LSB_EOF
-
-# 2. Archiso kalıntılarını temizle
-rm -f /mnt/zelix_target/etc/mkinitcpio.conf.d/archiso.conf /mnt/zelix_target/etc/mkinitcpio.conf.d/archiso* 2>/dev/null || true
-
-# 3. mkinitcpio & Plymouth
-cat << 'MKC_EOF' > /mnt/zelix_target/etc/mkinitcpio.conf
-MODULES=()
-BINARIES=()
-FILES=()
-HOOKS=(base udev plymouth autodetect modconf kms keyboard keymap consolefont block filesystems fsck)
-COMPRESSION="zstd"
-MKC_EOF
-
-mkdir -p /mnt/zelix_target/etc/plymouth
-cat << 'PLY_EOF' > /mnt/zelix_target/etc/plymouth/plymouthd.conf
-[Daemon]
-Theme=zelix-aurora
-ShowDelay=0
-DeviceTimeout=8
-PLY_EOF
-
-if command -v arch-chroot &>/dev/null; then
-    arch-chroot /mnt/zelix_target plymouth-set-default-theme -R zelix-aurora 2>/dev/null || arch-chroot /mnt/zelix_target mkinitcpio -P 2>/dev/null || true
-fi
-
-# 4. GRUB Yapılandırması ve Teması
-mkdir -p /mnt/zelix_target/boot/grub/themes/zelix-aurora /mnt/zelix_target/usr/share/grub/themes/zelix-aurora
-cp -r /mnt/zelix_target/usr/share/grub/themes/zelix-aurora/* /mnt/zelix_target/boot/grub/themes/zelix-aurora/ 2>/dev/null || true
-
-if [ -f "/mnt/zelix_target/etc/default/grub" ]; then
-    sed -i 's/GRUB_DISTRIBUTOR="Arch"/GRUB_DISTRIBUTOR="ZelixOS"/g' /mnt/zelix_target/etc/default/grub
-    sed -i 's|^#*GRUB_THEME=.*|GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"|' /mnt/zelix_target/etc/default/grub
-    grep -q "GRUB_THEME" /mnt/zelix_target/etc/default/grub || echo 'GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"' >> /mnt/zelix_target/etc/default/grub
-    sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=".*"/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3"/' /mnt/zelix_target/etc/default/grub
-    sed -i 's/GRUB_TERMINAL_OUTPUT=".*"/GRUB_TERMINAL_OUTPUT="gfxterm"/' /mnt/zelix_target/etc/default/grub
-    grep -q "GRUB_TERMINAL_OUTPUT" /mnt/zelix_target/etc/default/grub || echo 'GRUB_TERMINAL_OUTPUT="gfxterm"' >> /mnt/zelix_target/etc/default/grub
-    
-    if command -v arch-chroot &>/dev/null; then
-        arch-chroot /mnt/zelix_target grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
-    fi
-fi
-
-# 5. SDDM Yapılandırması
-mkdir -p /mnt/zelix_target/etc/sddm.conf.d
-cat << 'SDDM_EOF' > /mnt/zelix_target/etc/sddm.conf
-[Theme]
-Current=zelix-aurora
-CursorTheme=breeze_cursors
-SDDM_EOF
-
-cat << 'SDDM_EOF2' > /mnt/zelix_target/etc/sddm.conf.d/zelix.conf
-[Theme]
-Current=zelix-aurora
-CursorTheme=breeze_cursors
-SDDM_EOF2
-
-cat << 'SDDM_EOF3' > /mnt/zelix_target/etc/sddm.conf.d/kde_settings.conf
-[Theme]
-Current=zelix-aurora
-CursorTheme=breeze_cursors
-SDDM_EOF3
-
-if command -v arch-chroot &>/dev/null; then
-    arch-chroot /mnt/zelix_target systemctl enable sddm 2>/dev/null || true
-    arch-chroot /mnt/zelix_target systemctl set-default graphical.target 2>/dev/null || true
-fi
-
-# 6. KDE Duvar Kağıdı (minimalistic.png) & Koyu Tema
-mkdir -p /mnt/zelix_target/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates
-mkdir -p /mnt/zelix_target/etc/xdg/autostart
-
-cat <<'JSEOF' > /mnt/zelix_target/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/00-zelix-wallpaper.js
-var allDesktops = desktops();
-for (var i = 0; i < allDesktops.length; i++) {
-    var d = allDesktops[i];
-    d.wallpaperPlugin = "org.kde.image";
-    d.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
-    d.writeConfig("Image", "/usr/share/wallpapers/Zelix/minimalistic.png");
-    d.writeConfig("FillMode", 2);
-}
-JSEOF
-
-cat <<'WPEOF' > /mnt/zelix_target/etc/xdg/autostart/zelix-firstrun-wallpaper.desktop
-[Desktop Entry]
-Type=Application
-Name=Zelix First Run Theme Setup
-Exec=bash -c 'if [ ! -f "$HOME/.config/.zelix_theme_done" ]; then sleep 2 && (plasma-apply-lookandfeel -a org.kde.breezedark.desktop || true) && (plasma-apply-colorscheme BreezeDark || true) && (plasma-apply-wallpaperimage "/usr/share/wallpapers/Zelix/minimalistic.png" || true) && (kwriteconfig6 --file kdeglobals --group General --key AccentColor "255,255,255" || kwriteconfig5 --file kdeglobals --group General --key AccentColor "255,255,255" || true) && touch "$HOME/.config/.zelix_theme_done"; fi'
-Hidden=false
-NoDisplay=true
-X-GNOME-Autostart-enabled=true
-WPEOF
-
-chmod 644 /mnt/zelix_target/etc/skel/.config/* 2>/dev/null || true
-for user_home in /mnt/zelix_target/home/*; do
-    if [ -d "$user_home" ]; then
-        user_name=$(basename "$user_home")
-        mkdir -p "$user_home/.config"
-        cp -rf /mnt/zelix_target/etc/skel/.config/* "$user_home/.config/" 2>/dev/null || true
-        rm -f "$user_home/.config/.zelix_wallpaper_done" "$user_home/.config/.zelix_theme_done" 2>/dev/null || true
-        arch-chroot /mnt/zelix_target chown -R "$user_name:$user_name" "/home/$user_name" 2>/dev/null || true
-    fi
-done
-
-# 7. Pacman Repoları (multilib & zelixrepo)
-if [ -f "/mnt/zelix_target/etc/pacman.conf" ]; then
-    sed -i '/\[multilib\]/,/Include/ s/^#//' /mnt/zelix_target/etc/pacman.conf
-    if ! grep -q "\[zelixrepo\]" /mnt/zelix_target/etc/pacman.conf; then
-        cat << 'PAC_EOF' >> /mnt/zelix_target/etc/pacman.conf
+EOF
+printf 'DISTRIB_ID=ZelixOS\nDISTRIB_RELEASE=rolling\nDISTRIB_DESCRIPTION="ZelixOS Aurora"\n' > "$TARGET/etc/lsb-release"
+printf 'ZelixOS Aurora \\l\n' > "$TARGET/etc/issue"
+# Enforce the same multilib decision in every installation phase.
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+python - "$TARGET/etc/pacman.conf" "$MULTILIB" "$SCRIPT_DIR" <<'PYCODE'
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[3])
+from installer_support import configure_multilib
+p = Path(sys.argv[1])
+p.write_text(configure_multilib(p.read_text(), sys.argv[2] == 'true'))
+PYCODE
+if ! grep -q '^\[zelixrepo\]' "$TARGET/etc/pacman.conf"; then
+    cat >> "$TARGET/etc/pacman.conf" <<'EOF'
 
 [zelixrepo]
 SigLevel = Optional TrustAll
 Server = https://github.com/ZelixOS/zelix-repo/releases/download/stable
-PAC_EOF
-    fi
+EOF
 fi
+if (( $# )); then
+    # Package failures are critical; propagate the result to the installer UI.
+    arch-chroot "$TARGET" pacman -Syu --noconfirm --needed "$@"
+fi
+SERVICE=$GREETER
+[[ $GREETER == lightdm-gtk-greeter ]] && SERVICE=lightdm
+# archinstall selected the greeter; explicitly preserve that service selection.
+arch-chroot "$TARGET" systemctl enable "$SERVICE.service"
+arch-chroot "$TARGET" systemctl set-default graphical.target
 
-echo "Sistem temizleniyor ve disk ayrılıyor..."
+# Keep archinstall's kernel/storage hooks. Add Plymouth rather than replacing them.
+python - "$TARGET/etc/mkinitcpio.conf" <<'PY'
+import re, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+s = p.read_text()
+match = re.search(r'^HOOKS=\(([^)]*)\)', s, re.M)
+if not match:
+    raise SystemExit('Cannot find mkinitcpio HOOKS')
+hooks = match.group(1).replace('"', '').replace("'", '').split()
+if 'plymouth' not in hooks:
+    index = hooks.index('systemd') + 1 if 'systemd' in hooks else hooks.index('udev') + 1
+    hooks.insert(index, 'plymouth')
+p.write_text(s[:match.start()] + 'HOOKS=(' + ' '.join(hooks) + ')' + s[match.end():])
+PY
+rm -f "$TARGET/etc/mkinitcpio.conf.d/archiso.conf"
+mkdir -p "$TARGET/etc/plymouth"
+install -m644 "$DEPS_PATH/etc/plymouth/plymouthd.conf" "$TARGET/etc/plymouth/"
+arch-chroot "$TARGET" plymouth-set-default-theme -R zelix-aurora
+if [[ $BOOTLOADER == Grub ]]; then
+    install -m644 "$DEPS_PATH/etc/default/grub" "$TARGET/etc/default/grub"
+    arch-chroot "$TARGET" grub-mkconfig -o /boot/grub/grub.cfg
+elif [[ $BOOTLOADER == Systemd-boot ]]; then
+    for entry in "$TARGET"/boot/loader/entries/*.conf; do
+        [[ -f $entry ]] || continue
+        sed -i 's/Arch Linux/ZelixOS/g; /^options / { /splash/! s/$/ quiet splash/; }' "$entry"
+    done
+fi
 sync
-umount /mnt/zelix_target 2>/dev/null || true
-echo "ZelixOS Aurora yapılandırması başarıyla tamamlandı!"
+printf 'ZelixOS post-install completed.\n'

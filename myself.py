@@ -8,6 +8,8 @@ import re
 import socket
 import urllib.request
 import tempfile
+from installer_support import (selected_greeter, validate_choices, build_partitions,
+                               partition_path, ZELIX_PACKAGES)
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QStackedWidget, QFrame, QComboBox, QHBoxLayout,
@@ -382,14 +384,15 @@ def scan_disks():
     fallback = [get_text("disk_fallback")]
     try:
         result = subprocess.run(
-            ['lsblk', '-d', '-n', '-o', 'NAME,SIZE,MODEL'],
+            ['lsblk', '-d', '-n', '-o', 'NAME,SIZE,MODEL,TYPE'],
             capture_output=True, text=True, check=True
         )
         disks = []
         for line in result.stdout.strip().split('\n'):
             if line:
                 parts = line.split()
-                if len(parts) >= 2:
+                if len(parts) >= 3 and parts[-1] == "disk":
+                    parts = parts[:-1]
                     name = parts[0]
                     # Skip loop and ram devices
                     if name.startswith("loop") or name.startswith("ram"):
@@ -400,7 +403,7 @@ def scan_disks():
                     disks.append(f"{dev_path} ({size}) - {model}")
         return disks if disks else fallback
     except Exception:
-        return ["/dev/sda (50G) - Virtual Disk", "/dev/nvme0n1 (500G) - NVMe Disk"]
+        return []
 
 
 def get_disk_size_bytes(disk_path):
@@ -412,7 +415,7 @@ def get_disk_size_bytes(disk_path):
         )
         return int(res.stdout.strip())
     except Exception:
-        return 50 * 1024 ** 3  # Fallback: 50 GiB
+        return 0  # Fail closed: never invent a target disk capacity.
 
 
 # ─────────────────────────────────────────────
@@ -601,6 +604,8 @@ class SystemConfigPage(InstallerPage):
         self.bootloader_combo = QComboBox()
         for display, _key in self.BOOTLOADERS:
             self.bootloader_combo.addItem(display)
+        if not is_uefi():
+            self.bootloader_combo.setCurrentIndex(1)
         self.form_layout.addRow(self.bootloader_label, self.bootloader_combo)
 
         # Greeter Selection
@@ -608,7 +613,8 @@ class SystemConfigPage(InstallerPage):
         self.greeter_combo = QComboBox()
         # Default option + common ones
         self.greeter_combo.addItem("Default (DE Dependent)", "default")
-        self.greeter_combo.addItems(["sddm", "gdm", "lightdm-gtk-greeter", "ly"])
+        for greeter in ("sddm", "gdm", "lightdm-gtk-greeter", "ly"):
+            self.greeter_combo.addItem(greeter, greeter)
         self.form_layout.addRow(self.greeter_label, self.greeter_combo)
 
         self.main_layout.addLayout(self.form_layout)
@@ -1364,8 +1370,9 @@ class SummaryPage(InstallerPage):
         reply = QMessageBox.question(
             self,
             get_text("confirm_title"),
-            get_text("confirm_msg"),
+            get_text("confirm_msg") + "\n\n" + self.main_window.pages[3].disk_combo.currentText(),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
 
         if reply == QMessageBox.StandardButton.Yes:
@@ -1380,7 +1387,7 @@ class SummaryPage(InstallerPage):
         base_packages = [
             "firefox", "dolphin", "konsole", "python-pyqt6", "sudo", "plymouth",
             "qt6-svg", "qt6-5compat", "qt5-quickcontrols2", "qt5-graphicaleffects",
-            "sddm-kcm", "fastfetch"
+            "fastfetch"
         ]
 
         # Add bootloader-specific packages
@@ -1391,23 +1398,14 @@ class SummaryPage(InstallerPage):
             base_packages.append("refind")
         # Systemd-boot doesn't need extra packages
 
-        # Add greeter packages based on manual choice or DE default
-        greeter_data = sys_page.greeter_combo.currentData()
-        if greeter_data != "default":
-            if greeter_data == "lightdm-gtk-greeter":
-                base_packages.extend(["lightdm", "lightdm-gtk-greeter"])
-            else:
-                base_packages.append(greeter_data)
+        greeter = selected_greeter(sys_page.de_combo.currentText(),
+                                   sys_page.greeter_combo.currentData())
+        if greeter == "lightdm-gtk-greeter":
+            base_packages.extend(["lightdm", greeter])
         else:
-            de = sys_page.de_combo.currentText()
-            if de == "KDE Plasma":
-                base_packages.append("sddm")
-            elif de == "GNOME":
-                base_packages.append("gdm")
-            elif de in ("Xfce4", "Sway", "i3-wm"):
-                base_packages.extend(["lightdm", "lightdm-gtk-greeter"])
-            elif de in ("Hyprland", "bspwm"):
-                base_packages.append("sddm")
+            base_packages.append(greeter)
+        if greeter == "sddm":
+            base_packages.append("sddm-kcm")
 
         # ZelixRepo packages must NOT be passed to archinstall/pacstrap directly,
         # because archinstall only knows official Arch repos. They will be installed
@@ -1443,91 +1441,14 @@ class SummaryPage(InstallerPage):
 
     @staticmethod
     def _build_custom_commands(multilib_enabled: bool, extra_packages: list) -> list:
-        """Builds post-install custom commands for archinstall.
-        
-        These commands run inside the chroot after base installation.
-        They configure ZelixOS theming (GRUB, Plymouth, SDDM, KDE colors).
-        """
-        commands = []
-
-        if multilib_enabled:
-            commands.append(
-                'sed -i "/\\[multilib\\]/,/Include/ s/^#//" /etc/pacman.conf'
-            )
-            commands.append("pacman -Sy --noconfirm")
-
-        # ── 1. Remove archiso leftover that breaks mkinitcpio ──
-        commands.append("rm -f /etc/mkinitcpio.conf.d/archiso.conf /etc/mkinitcpio.conf.d/archiso*")
-
-        # ── 2. Write mkinitcpio.conf with plymouth hook ──
-        commands.append(
-            'echo -e "MODULES=()\\nBINARIES=()\\nFILES=()\\n'
-            'HOOKS=(base udev plymouth autodetect modconf kms keyboard keymap consolefont block filesystems fsck)\\n'
-            'COMPRESSION=\\"zstd\\"" > /etc/mkinitcpio.conf'
-        )
-
-        # ── 3. Configure Plymouth ──
-        commands.append("mkdir -p /etc/plymouth")
-        commands.append(
-            'echo -e "[Daemon]\\nTheme=zelix-aurora\\nShowDelay=0\\nDeviceTimeout=8" > /etc/plymouth/plymouthd.conf'
-        )
-        commands.append("plymouth-set-default-theme -R zelix-aurora || mkinitcpio -P || true")
-
-        # ── 4. Configure GRUB theme & quiet splash ──
-        commands.append("mkdir -p /boot/grub/themes/zelix-aurora /usr/share/grub/themes/zelix-aurora")
-        commands.append("cp -r /usr/share/grub/themes/zelix-aurora/* /boot/grub/themes/zelix-aurora/ 2>/dev/null || true")
-        commands.append(
-            'sed -i \'s/GRUB_DISTRIBUTOR="Arch"/GRUB_DISTRIBUTOR="ZelixOS"/g\' /etc/default/grub 2>/dev/null || true'
-        )
-        commands.append(
-            "grep -q 'GRUB_THEME' /etc/default/grub && "
-            'sed -i \'s|^#*GRUB_THEME=.*|GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"|\' /etc/default/grub || '
-            'echo \'GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"\' >> /etc/default/grub'
-        )
-        commands.append(
-            "grep -q 'GRUB_CMDLINE_LINUX_DEFAULT' /etc/default/grub && "
-            'sed -i \'s/GRUB_CMDLINE_LINUX_DEFAULT=".*"/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3"/\' /etc/default/grub || '
-            'echo \'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3"\' >> /etc/default/grub'
-        )
-        commands.append(
-            "grep -q 'GRUB_TERMINAL_OUTPUT' /etc/default/grub && "
-            'sed -i \'s/GRUB_TERMINAL_OUTPUT=".*"/GRUB_TERMINAL_OUTPUT="gfxterm"/\' /etc/default/grub || '
-            'echo \'GRUB_TERMINAL_OUTPUT="gfxterm"\' >> /etc/default/grub'
-        )
-        commands.append("grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true")
-
-        # ── 5. Configure SDDM theme ──
-        commands.append("mkdir -p /etc/sddm.conf.d")
-        commands.append(
-            'echo -e "[Theme]\\nCurrent=zelix-aurora\\nCursorTheme=breeze_cursors" > /etc/sddm.conf'
-        )
-        commands.append(
-            'echo -e "[Theme]\\nCurrent=zelix-aurora\\nCursorTheme=breeze_cursors" > /etc/sddm.conf.d/zelix.conf'
-        )
-        commands.append("systemctl enable sddm.service 2>/dev/null || true")
-        commands.append("systemctl set-default graphical.target 2>/dev/null || true")
-
-        # ── 6. Apply KDE dark theme to all users via skel ──
-        commands.append(
-            'for d in /home/*/; do '
-            'u=$(basename "$d"); '
-            'mkdir -p "$d/.config"; '
-            'cp -rn /etc/skel/.config/* "$d/.config/" 2>/dev/null; '
-            'chown -R "$u:$u" "$d" 2>/dev/null; '
-            'done || true'
-        )
-
-        # Install flatpak apps if any were selected
-        flatpak_apps = [pkg.split(":", 1)[1] for pkg in extra_packages if pkg.startswith("flatpak:")]
-        if flatpak_apps:
-            commands.append("flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo")
-            for app_name in flatpak_apps:
-                flatpak_ids = {
-                    "spotify": "com.spotify.Client",
-                }
-                flatpak_id = flatpak_ids.get(app_name, app_name)
-                commands.append(f"flatpak install -y flathub {flatpak_id}")
-
+        # Branding is applied only after assets are copied, in zelix_post_install.sh.
+        apps = [p.split(":", 1)[1] for p in extra_packages if p.startswith("flatpak:")]
+        if not apps:
+            return []
+        commands = ["flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo"]
+        for app in apps:
+            app_id = {"spotify": "com.spotify.Client"}.get(app, app)
+            commands.append(f"flatpak install -y flathub {app_id}")
         return commands
 
     def generate_json(self):
@@ -1552,93 +1473,27 @@ class SummaryPage(InstallerPage):
         selected_disk_path = disk_page.disk_combo.currentText().split(" ")[0]
         selected_de = sys_page.de_combo.currentText()
 
-        # Greeter choices per DE (GreeterType enum values)
-        greeters = {
-            "KDE Plasma": "sddm",
-            "GNOME": "gdm",
-            "Xfce4": "lightdm-gtk-greeter",
-            "Hyprland": "sddm",
-            "Sway": "lightdm-gtk-greeter",
-            "i3-wm": "lightdm-gtk-greeter",
-            "bspwm": "sddm",
-        }
-        # --- Compute partition sizes ---
+        greeter = selected_greeter(selected_de, sys_page.greeter_combo.currentData())
         total_bytes = get_disk_size_bytes(selected_disk_path)
-        MiB = 1024 * 1024
-        total_mib   = total_bytes // MiB
-
-        boot_start_mib = 1
-        boot_size_mib  = 512
-        root_start_mib = boot_start_mib + boot_size_mib  # 513 MiB
-
-        # Reserve 1 MiB at end for GPT backup header
-        usable_mib = total_mib - root_start_mib - 1
-
-        if usable_mib < (20 * 1024):
-            # Disk < 20 GiB: no separate home, everything goes to root
-            root_size_mib = usable_mib
-            home_size_mib = 0
-        else:
-            # Allocate 40% to root (min 20 GiB, max 100 GiB), rest to home
-            calculated_root_mib = int(usable_mib * 0.4)
-            root_size_mib = min(max(calculated_root_mib, 20 * 1024), 100 * 1024)
-            home_size_mib = usable_mib - root_size_mib
-
-        home_start_mib = root_start_mib + root_size_mib
-
-        # archinstall Size serialisation format
-        sector_512 = {"unit": "B", "value": 512}
-
-        def make_size(value_mib):
-            return {
-                "sector_size": sector_512,
-                "unit": "MiB",
-                "value": value_mib,
-            }
-
-        partition_list = [
-            {
-                "btrfs": [],
-                "flags": ["boot", "esp"],
-                "fs_type": "fat32",
-                "start": make_size(boot_start_mib),
-                "size": make_size(boot_size_mib),
-                "mount_options": [],
-                "mountpoint": "/boot",
-                "status": "create",
-                "type": "primary",
-                "dev_path": None,
-                "obj_id": str(uuid.uuid4()),
-            },
-            {
-                "btrfs": [],
-                "flags": [],
-                "fs_type": "ext4",
-                "start": make_size(root_start_mib),
-                "size": make_size(root_size_mib),
-                "mount_options": [],
-                "mountpoint": "/",
-                "status": "create",
-                "type": "primary",
-                "dev_path": None,
-                "obj_id": str(uuid.uuid4()),
-            },
-        ]
-
-        if home_size_mib > 0:
-            partition_list.append({
-                "btrfs": [],
-                "flags": [],
-                "fs_type": "ext4",
-                "start": make_size(home_start_mib),
-                "size": make_size(home_size_mib),
-                "mount_options": [],
-                "mountpoint": "/home",
-                "status": "create",
-                "type": "primary",
-                "dev_path": None,
-                "obj_id": str(uuid.uuid4()),
-            })
+        try:
+            if not os.path.exists(selected_disk_path):
+                raise ValueError("Hedef disk bulunamadı / Target disk is unavailable.")
+            # A mounted target may contain the running/live system or user data.
+            result = subprocess.run(
+                ["lsblk", "--json", "--output", "TYPE,MOUNTPOINTS", selected_disk_path],
+                capture_output=True, text=True, check=True)
+            devices = json.loads(result.stdout)["blockdevices"]
+            def mounted(device):
+                return any(device.get("mountpoints") or []) or any(
+                    mounted(child) for child in device.get("children", []))
+            if not devices or devices[0]["type"] != "disk" or any(mounted(d) for d in devices):
+                raise ValueError("Bağlı/kullanılan disk seçilemez / Target disk must be unmounted.")
+            validate_choices(total_bytes, is_uefi(), sys_page.selected_bootloader(),
+                             sys_page.selected_kernels(), multilib_enabled, extra_packages)
+        except (ValueError, OSError, subprocess.SubprocessError) as e:
+            QMessageBox.critical(self, "Disk / Configuration", str(e))
+            return False
+        partition_list = build_partitions(total_bytes, is_uefi(), len(sys_page.selected_kernels()))
 
         # ═══════════════════════════════════════════════════════════
         # 1. MAIN CONFIG — archinstall 4.x compatible
@@ -1657,7 +1512,7 @@ class SummaryPage(InstallerPage):
             "bootloader_config": {
                 "bootloader": sys_page.selected_bootloader(),
                 "uki": False,
-                "removable": True,
+                "removable": is_uefi() and sys_page.selected_bootloader() == "Grub",
             },
 
             "disk_config": {
@@ -1689,11 +1544,7 @@ class SummaryPage(InstallerPage):
 
             "profile_config": {
                 "gfx_driver": None,
-                "greeter": (
-                    sys_page.greeter_combo.currentText() 
-                    if sys_page.greeter_combo.currentData() != "default" 
-                    else greeters.get(selected_de, "sddm")
-                ),
+                "greeter": greeter,
                 "profile": {
                     "main": "Desktop",
                     "details": [selected_de],
@@ -1747,6 +1598,16 @@ class SummaryPage(InstallerPage):
                 creds_path = creds_file.name
                 json.dump(arch_creds, creds_file, indent=4, ensure_ascii=False)
 
+            self.main_window.install_target = {
+                "disk": selected_disk_path,
+                "root": partition_path(selected_disk_path, 2),
+                "boot": partition_path(selected_disk_path, 1),
+                "home": partition_path(selected_disk_path, 3) if len(partition_list) == 3 else "-",
+                "desktop": selected_de, "greeter": greeter,
+                "bootloader": sys_page.selected_bootloader(),
+                "multilib": "true" if multilib_enabled else "false",
+                "packages": [pkg for pkg in extra_packages if pkg in ZELIX_PACKAGES],
+            }
             self.main_window.install_config_path = config_path
             self.main_window.install_creds_path = creds_path
             return True
@@ -1814,6 +1675,8 @@ class InstallProgressPage(InstallerPage):
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
         self.process.finished.connect(self.process_finished)
+        self.process.errorOccurred.connect(self.process_error)
+        self.log_path = None
 
         self.retranslate()
 
@@ -1826,6 +1689,9 @@ class InstallProgressPage(InstallerPage):
             return
 
         self.log_console.clear()
+        fd, self.log_path = tempfile.mkstemp(prefix="zelix-install-", suffix=".log")
+        os.close(fd)
+        self.log_console.appendPlainText("Log: " + self.log_path)
         self.log_console.appendPlainText(get_text("install_log_header"))
 
         self.process.start("pkexec", [
@@ -1839,6 +1705,9 @@ class InstallProgressPage(InstallerPage):
         data = self.process.readAllStandardOutput()
         raw_text = bytes(data).decode("utf8", errors="replace")
         clean_text = self.ansi_escape.sub('', raw_text)
+        if self.log_path:
+            with open(self.log_path, "a", encoding="utf-8") as log:
+                log.write(clean_text)
 
         if clean_text.strip():
             self.log_console.appendPlainText(clean_text.strip())
@@ -1847,375 +1716,58 @@ class InstallProgressPage(InstallerPage):
         scrollbar.setValue(scrollbar.maximum())
 
     def process_finished(self, exit_code, exit_status):
-        if exit_code == 0:
-            self.run_post_install()
-            self.title_label.setText(get_text("install_title_done"))
-            self.title_label.setStyleSheet(
-                "font-size: 28px; font-weight: bold; color: #FFFFFF;"
-            )
-            self.log_console.appendPlainText(get_text("install_done_msg"))
-            self.finish_btn.show()
-        else:
-            self.title_label.setText(get_text("install_title_fail"))
-            self.title_label.setStyleSheet(
-                "font-size: 28px; font-weight: bold; color: #e74c3c;"
-            )
-            self.log_console.appendPlainText(
-                get_text("install_fail_msg").format(code=exit_code)
-            )
+        if exit_code != 0 or exit_status != QProcess.ExitStatus.NormalExit:
+            self.install_failed(get_text("install_fail_msg").format(code=exit_code))
+            return
+        # Keep post-install asynchronous so output remains visible and Qt stays responsive.
+        self.run_post_install()
 
-        if hasattr(self.main_window, "cleanup_install_files"):
-            self.main_window.cleanup_install_files()
+    def install_failed(self, message):
+        self.title_label.setText(get_text("install_title_fail"))
+        self.title_label.setStyleSheet("font-size: 28px; color: #e74c3c;")
+        self.log_console.appendPlainText(message)
+        self.main_window.cleanup_install_files()
+
+    def process_error(self, error):
+        if error == QProcess.ProcessError.FailedToStart:
+            self.install_failed("İşlem başlatılamadı / Process could not start: " + self.process.errorString())
 
     def run_post_install(self):
-        """Copies ZelixOS-specific files (zelixdeps) to the newly installed disk."""
-        dirr = os.path.dirname(os.path.realpath(__file__))
-        deps_path = os.path.join(dirr, "zelixdeps")
-        if not os.path.exists(deps_path):
-            deps_path = "/usr/share/zelixins/zelixdeps"
-
-        if not os.path.exists(deps_path):
-            self.log_console.appendPlainText(get_text("post_warn_no_deps"))
+        base = os.path.dirname(os.path.realpath(__file__))
+        deps = os.path.join(base, "zelixdeps")
+        script = os.path.join(base, "zelix_post_install.sh")
+        target = getattr(self.main_window, "install_target", None)
+        if not target or not os.path.isdir(deps) or not os.path.isfile(script):
+            self.install_failed("Kurulum sonrası dosyalar eksik / Missing post-install files.")
             return
-
-        # Determine root and boot partition paths dynamically using lsblk
-        extra_page = self.main_window.pages[5]
-        selected_pkgs = extra_page.get_selected_packages()
-        zelixrepo_set = {
-            "yay", "paru", "zelix-hello", "zelix-updater",
-            "mkinitcpio-openswap", "alci-calamares", "calamares",
-            "ckbcomp", "gquick-git", "qrun-code-git"
-        }
-        zelix_pkgs_to_install = " ".join([p for p in selected_pkgs if p in zelixrepo_set])
-
-        disk_page = self.main_window.pages[3]
-        selected_disk_text = disk_page.disk_combo.currentText()
-        if not selected_disk_text:
-            self.log_console.appendPlainText(get_text("post_error_no_disk"))
-            return
-            
-        selected_disk = selected_disk_text.split(" ")[0]
-
-        # Dynamic partition detection using lsblk + PARTTYPE
-        # Instead of guessing /dev/sdaX or /dev/nvme0n1pX, we query the 
-        # actual partition table to find boot (ESP/fat32) and root (ext4) partitions.
-        root_part = None
-        boot_part = None
         try:
             result = subprocess.run(
-                ['lsblk', '-n', '-o', 'NAME,FSTYPE,PARTFLAGS,MOUNTPOINT', '-r', selected_disk],
-                capture_output=True, text=True, check=True
-            )
-            for line in result.stdout.strip().split('\n'):
-                cols = line.split()
-                if len(cols) < 2:
-                    continue
-                part_name = f"/dev/{cols[0]}"
-                fstype = cols[1] if len(cols) > 1 else ""
-                
-                # Skip the disk device itself
-                if part_name == selected_disk:
-                    continue
-                
-                if fstype in ("vfat", "fat32") and boot_part is None:
-                    boot_part = part_name
-                elif fstype in ("ext4", "btrfs", "xfs", "f2fs") and root_part is None:
-                    root_part = part_name
-        except Exception:
-            pass
+                ["lsblk", "--json", "--paths", "--output", "PATH,TYPE", target["disk"]],
+                capture_output=True, text=True, check=True)
+            devices = json.loads(result.stdout)["blockdevices"]
+            parts = {c["path"] for d in devices for c in d.get("children", []) if c["type"] == "part"}
+            expected = {target[k] for k in ("root", "boot", "home") if target[k] != "-"}
+            if not expected.issubset(parts):
+                raise ValueError("Hedef bölümler doğrulanamadı / Could not verify target partitions.")
+        except (ValueError, OSError, subprocess.SubprocessError) as e:
+            self.install_failed(str(e))
+            return
+        self.process.finished.disconnect(self.process_finished)
+        self.process.finished.connect(self.post_install_finished)
+        args = [script, target["root"], target["boot"], target["home"], deps,
+                target["desktop"], target["greeter"], target["bootloader"], target["multilib"],
+                *target["packages"]]
+        self.process.start("/bin/bash" if os.geteuid() == 0 else "pkexec",
+                           args if os.geteuid() == 0 else ["/bin/bash", *args])
 
-        # Fallback to name-based guessing if lsblk detection failed
-        if not root_part or not boot_part:
-            self.log_console.appendPlainText(get_text("post_warn_lsblk_fail"))
-            if any(x in selected_disk for x in ("nvme", "mmcblk", "loop")):
-                if not boot_part:
-                    boot_part = f"{selected_disk}p1"
-                if not root_part:
-                    root_part = f"{selected_disk}p2"
-            else:
-                if not boot_part:
-                    boot_part = f"{selected_disk}1"
-                if not root_part:
-                    root_part = f"{selected_disk}2"
-
-        self.log_console.appendPlainText(get_text("post_copy_header"))
-        self.log_console.appendPlainText(get_text("post_root_partition").format(part=root_part))
-        self.log_console.appendPlainText(get_text("post_boot_partition").format(part=boot_part))
-        self.log_console.appendPlainText(get_text("post_source").format(src=deps_path))
-        QApplication.processEvents()
-
-        # Bundle all privileged commands into one bash script to avoid
-        # multiple pkexec password prompts. Added bootloader branding.
-        # Includes a cleanup trap for safe umount on any failure.
-        script_content = f"""#!/bin/bash
-
-# Cleanup trap — ensures partitions are always unmounted on exit
-BOOT_MOUNTED=0
-cleanup() {{
-    echo "Temizlik yapılıyor..."
-    [ "$BOOT_MOUNTED" == "1" ] && umount /mnt/zelix_target/boot 2>/dev/null
-    mountpoint -q /mnt/zelix_target && umount /mnt/zelix_target 2>/dev/null
-}}
-trap cleanup EXIT
-
-set -e
-
-# Log file for debugging
-LOGFILE="/tmp/zelixos_postinstall.log"
-exec > >(tee -a "$LOGFILE") 2>&1
-
-echo "Hedef dizinler hazırlanıyor..."
-mountpoint -q /mnt/zelix_target && umount /mnt/zelix_target 2>/dev/null || true
-mkdir -p /mnt/zelix_target
-
-echo "Kök bölüm bağlanıyor: {root_part}"
-if ! mount {root_part} /mnt/zelix_target; then
-    echo "HATA: Kök bölüm ({root_part}) bağlanamadı!"
-    exit 1
-fi
-
-# Handle BTRFS subvolume layout if created by archinstall
-if [ -d "/mnt/zelix_target/@/etc" ]; then
-    echo "BTRFS @ alt hacmi algılandı, kök alt hacim bağlanıyor..."
-    umount /mnt/zelix_target
-    mount -o subvol=@ {root_part} /mnt/zelix_target
-fi
-
-# Verify mount succeeded by checking for essential directories
-if [ ! -d "/mnt/zelix_target/etc" ] && [ ! -d "/mnt/zelix_target/usr" ]; then
-    echo "HATA: Kök bölüm bağlandı ama boş görünüyor. Kurulum başarısız olmuş olabilir."
-    exit 1
-fi
-
-mkdir -p /mnt/zelix_target/boot
-echo "Önyükleme bölümü bağlanıyor: {boot_part}"
-if mount {boot_part} /mnt/zelix_target/boot; then
-    BOOT_MOUNTED=1
-else
-    echo "UYARI: Önyükleme bölümü bağlanamadı, önyükleyici isimlendirmesi atlanıyor."
-fi
-
-echo "Dosyalar kopyalanıyor..."
-if [ -d "{deps_path}" ] && [ "$(ls -A {deps_path})" ]; then
-    cp -arv "{deps_path}/." /mnt/zelix_target/
-else
-    echo "UYARI: zelixdeps klasörü boş veya erişilemez, atlanıyor."
-fi
-
-echo "ZelixOS Branding ayarlanıyor..."
-mkdir -p /mnt/zelix_target/etc
-
-# os-release & lsb-release
-cat <<EOF > /mnt/zelix_target/etc/os-release
-NAME="ZelixOS"
-PRETTY_NAME="ZelixOS Aurora"
-ID=zelixos
-ID_LIKE=arch
-BUILD_ID=rolling
-ANSI_COLOR="0;34"
-HOME_URL="https://zelixos.com"
-DOCUMENTATION_URL="https://zelixos.com/docs/docs.html"
-SUPPORT_URL="https://zelixos.com"
-BUG_REPORT_URL="https://zelixos.com/br.html"
-LOGO=/usr/share/zelix/zelix-icon.png
-EOF
-
-cat <<EOF > /mnt/zelix_target/etc/lsb-release
-DISTRIB_ID=ZelixOS
-DISTRIB_RELEASE=rolling
-DISTRIB_DESCRIPTION="ZelixOS Aurora"
-EOF
-
-echo "ZelixOS Aurora \\l" > /mnt/zelix_target/etc/issue
-echo "zelixos" > /mnt/zelix_target/etc/hostname
-
-# Bootloader Branding
-if [ "$BOOT_MOUNTED" == "1" ]; then
-    echo "Önyükleyici etiketleri güncelleniyor..."
-    
-    # 1. systemd-boot
-    if [ -d "/mnt/zelix_target/boot/loader/entries" ]; then
-        echo "systemd-boot girişleri düzenleniyor..."
-        sed -i 's/Arch Linux/ZelixOS/g' /mnt/zelix_target/boot/loader/entries/*.conf 2>/dev/null || true
-    fi
-fi
-
-# Always enable multilib repository (ZelixOS default)
-echo "Multilib deposu etkinleştiriliyor..."
-if [ -f "/mnt/zelix_target/etc/pacman.conf" ]; then
-    sed -i '/\\[multilib\\]/,/Include/ s/^#//' /mnt/zelix_target/etc/pacman.conf
-    echo "-> Multilib deposu etkinleştirildi."
-fi
-
-# Add zelixrepo to the installed system
-echo "ZelixRepo ekleniyor..."
-if [ -f "/mnt/zelix_target/etc/pacman.conf" ]; then
-    if ! grep -q "\\[zelixrepo\\]" /mnt/zelix_target/etc/pacman.conf; then
-        cat <<EOF >> /mnt/zelix_target/etc/pacman.conf
-
-[zelixrepo]
-SigLevel = Optional TrustAll
-Server = https://github.com/ZelixOS/zelix-repo/releases/download/stable
-EOF
-        echo "-> ZelixRepo başarıyla eklendi."
-    else
-        echo "-> ZelixRepo zaten mevcut."
-    fi
-fi
-
-# ═══════════════════════════════════════════════════════════════════
-# ZelixOS Görsel Tema Yapılandırması (GRUB, Plymouth, SDDM, KDE)
-# arch-chroot ile hedef sistemin içinde çalıştırılır
-# ═══════════════════════════════════════════════════════════════════
-if command -v arch-chroot &>/dev/null; then
-    echo "ZelixOS görsel temaları ve ek paketleri yapılandırılıyor..."
-
-    # 1. archiso kalıntılarını temizle
-    arch-chroot /mnt/zelix_target rm -f /etc/mkinitcpio.conf.d/archiso.conf /etc/mkinitcpio.conf.d/archiso* 2>/dev/null || true
-
-    # 2. ZelixRepo ek paketlerini kur (paru, yay vb.)
-    if [ -n "{zelix_pkgs_to_install}" ]; then
-        echo "ZelixRepo ek paketleri yükleniyor: {zelix_pkgs_to_install}..."
-        arch-chroot /mnt/zelix_target pacman -Sy --noconfirm 2>/dev/null || true
-        arch-chroot /mnt/zelix_target pacman -S --noconfirm --needed {zelix_pkgs_to_install} 2>/dev/null || true
-    fi
-
-    # 3. mkinitcpio.conf — plymouth hook ile yaz
-    cat <<'MKCEOF' > /mnt/zelix_target/etc/mkinitcpio.conf
-MODULES=()
-BINARIES=()
-FILES=()
-HOOKS=(base udev plymouth autodetect modconf kms keyboard keymap consolefont block filesystems fsck)
-COMPRESSION="zstd"
-MKCEOF
-
-    # 4. Plymouth yapılandırması
-    mkdir -p /mnt/zelix_target/etc/plymouth
-    cat <<'PLYEOF' > /mnt/zelix_target/etc/plymouth/plymouthd.conf
-[Daemon]
-Theme=zelix-aurora
-ShowDelay=0
-DeviceTimeout=8
-PLYEOF
-    arch-chroot /mnt/zelix_target plymouth-set-default-theme -R zelix-aurora 2>/dev/null || arch-chroot /mnt/zelix_target mkinitcpio -P 2>/dev/null || true
-
-    # 5. GRUB tema ve quiet splash yapılandırması
-    if [ -f "/mnt/zelix_target/etc/default/grub" ]; then
-        arch-chroot /mnt/zelix_target mkdir -p /boot/grub/themes/zelix-aurora /usr/share/grub/themes/zelix-aurora 2>/dev/null || true
-        arch-chroot /mnt/zelix_target cp -r /usr/share/grub/themes/zelix-aurora/* /boot/grub/themes/zelix-aurora/ 2>/dev/null || true
-        sed -i 's/GRUB_DISTRIBUTOR="Arch"/GRUB_DISTRIBUTOR="ZelixOS"/g' /mnt/zelix_target/etc/default/grub
-        sed -i 's|^#*GRUB_THEME=.*|GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"|' /mnt/zelix_target/etc/default/grub
-        grep -q "GRUB_THEME" /mnt/zelix_target/etc/default/grub || echo 'GRUB_THEME="/usr/share/grub/themes/zelix-aurora/theme.txt"' >> /mnt/zelix_target/etc/default/grub
-        sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=".*"/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3"/' /mnt/zelix_target/etc/default/grub
-        sed -i 's/GRUB_TERMINAL_OUTPUT=".*"/GRUB_TERMINAL_OUTPUT="gfxterm"/' /mnt/zelix_target/etc/default/grub
-        grep -q "GRUB_TERMINAL_OUTPUT" /mnt/zelix_target/etc/default/grub || echo 'GRUB_TERMINAL_OUTPUT="gfxterm"' >> /mnt/zelix_target/etc/default/grub
-        arch-chroot /mnt/zelix_target grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
-    fi
-
-    # 6. SDDM tema yapılandırması
-    mkdir -p /mnt/zelix_target/etc/sddm.conf.d
-    cat <<'SDDMEOF' > /mnt/zelix_target/etc/sddm.conf
-[Theme]
-Current=zelix-aurora
-CursorTheme=breeze_cursors
-SDDMEOF
-    cat <<'SDDMEOF2' > /mnt/zelix_target/etc/sddm.conf.d/zelix.conf
-[Theme]
-Current=zelix-aurora
-CursorTheme=breeze_cursors
-SDDMEOF2
-    arch-chroot /mnt/zelix_target systemctl enable sddm.service 2>/dev/null || true
-    arch-chroot /mnt/zelix_target systemctl set-default graphical.target 2>/dev/null || true
-
-    # 7. KDE Duvar Kağıdı (minimalistic.png) ve Koyu Tema
-    mkdir -p /mnt/zelix_target/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates
-    mkdir -p /mnt/zelix_target/etc/xdg/autostart
-
-    # Plasma ilk başlatma update betiği
-    cat <<'JSEOF' > /mnt/zelix_target/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/00-zelix-wallpaper.js
-var allDesktops = desktops();
-for (var i = 0; i < allDesktops.length; i++) {{
-    var d = allDesktops[i];
-    d.wallpaperPlugin = "org.kde.image";
-    d.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
-    d.writeConfig("Image", "/usr/share/wallpapers/Zelix/minimalistic.png");
-    d.writeConfig("FillMode", 2);
-}}
-
-var allPanels = panels();
-for (var p = 0; p < allPanels.length; p++) {{
-    var widgets = allPanels[p].widgets();
-    for (var w = 0; w < widgets.length; w++) {{
-        var widget = widgets[w];
-        if (widget.type === "org.kde.plasma.kickoff") {{
-            widget.currentConfigGroup = ["General"];
-            widget.writeConfig("icon", "/usr/share/zelix/zelix-icon.png");
-            widget.writeConfig("useCustomButtonImage", "true");
-        }}
-        if (widget.type === "org.kde.plasma.icontasks") {{
-            widget.currentConfigGroup = ["General"];
-            widget.writeConfig("launchers", "applications:systemsettings.desktop,applications:org.kde.discover.desktop,applications:org.kde.dolphin.desktop,applications:org.kde.konsole.desktop");
-        }}
-    }}
-}}
-JSEOF
-
-    # İlk girişte koyu tema ve duvar kağıdını tek seferlik uygulayan autostart (çalıştıktan sonra kendini siler)
-    cat <<'WPEOF' > /mnt/zelix_target/etc/xdg/autostart/zelix-firstrun-wallpaper.desktop
-[Desktop Entry]
-Type=Application
-Name=Zelix First Run Theme Setup
-Exec=bash -c 'sleep 3 && (plasma-apply-lookandfeel -a org.kde.breezedark.desktop || true) && (plasma-apply-colorscheme BreezeDark || true) && (plasma-apply-wallpaperimage "/usr/share/wallpapers/Zelix/minimalistic.png" || true) && (kwriteconfig6 --file kdeglobals --group General --key AccentColor "255,255,255" || kwriteconfig5 --file kdeglobals --group General --key AccentColor "255,255,255" || true); rm -f "$HOME/.config/autostart/zelix-firstrun-wallpaper.desktop" /etc/xdg/autostart/zelix-firstrun-wallpaper.desktop 2>/dev/null || true'
-Hidden=false
-NoDisplay=true
-X-GNOME-Autostart-enabled=true
-WPEOF
-
-    for user_home in /mnt/zelix_target/home/*/; do
-        if [ -d "$user_home" ]; then
-            user_name=$(basename "$user_home")
-            mkdir -p "$user_home/.config"
-            cp -rf /mnt/zelix_target/etc/skel/.config/* "$user_home/.config/" 2>/dev/null || true
-            rm -f "$user_home/.config/.zelix_wallpaper_done" "$user_home/.config/.zelix_theme_done" 2>/dev/null || true
-            arch-chroot /mnt/zelix_target chown -R "$user_name:$user_name" "/home/$user_name" 2>/dev/null || true
-        fi
-    done
-fi
-
-echo "Senkronize ediliyor..."
-sync
-
-echo "İşlem başarıyla tamamlandı!"
-# cleanup trap handles umount automatically
-"""
-
-        script_path = None
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, mode="w", encoding="utf-8",
-                                              prefix="zelix_post_install_", suffix=".sh") as f:
-                script_path = f.name
-                f.write(script_content)
-            os.chmod(script_path, 0o755)
-
-            # Use direct bash if running as root (e.g. launched with sudo), otherwise pkexec
-            cmd = ["/bin/bash", script_path] if os.geteuid() == 0 else ["pkexec", "/bin/bash", script_path]
-            res = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if res.returncode == 0:
-                self.log_console.appendPlainText(res.stdout)
-                self.log_console.appendPlainText(get_text("post_copy_done"))
-            else:
-                self.log_console.appendPlainText(get_text("post_error_script_fail").format(code=res.returncode))
-                self.log_console.appendPlainText(res.stderr)
-                self.log_console.appendPlainText(res.stdout)
-        except Exception as e:
-            self.log_console.appendPlainText(get_text("post_copy_error").format(err=e))
-        finally:
-            if os.path.exists(script_path):
-                try:
-                    os.remove(script_path)
-                except:
-                    pass
+    def post_install_finished(self, exit_code, exit_status):
+        if exit_code != 0 or exit_status != QProcess.ExitStatus.NormalExit:
+            self.install_failed("ZelixOS yapılandırması başarısız / Post-install failed. Log: " + self.log_path)
+            return
+        self.title_label.setText(get_text("install_title_done"))
+        self.log_console.appendPlainText(get_text("install_done_msg"))
+        self.finish_btn.show()
+        self.main_window.cleanup_install_files()
 
     def retranslate(self):
         self.title_label.setText(get_text("install_title_running"))
@@ -2229,7 +1781,7 @@ echo "İşlem başarıyla tamamlandı!"
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.1.6")
+        self.setWindowTitle("ZelixOS Installer v1.1.7")
         for icon_candidate in (
             "/usr/share/zelix/zelix-installer.png",
             "/usr/share/pixmaps/zelix-installer.png",
@@ -2392,6 +1944,11 @@ class MainWindow(QWidget):
         self.install_creds_path = None
 
     def closeEvent(self, event):
+        progress = self.pages[7]
+        if progress.process.state() != QProcess.ProcessState.NotRunning:
+            QMessageBox.warning(self, "Kurulum / Installation", "İşlem sürüyor / Installation is still running.")
+            event.ignore()
+            return
         self.cleanup_install_files()
         event.accept()
 

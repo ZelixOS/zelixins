@@ -19,26 +19,21 @@ class CommandRunner(QThread):
             process = subprocess.Popen(
                 self.command,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1
             )
-            
+
             while True:
                 output = process.stdout.readline()
                 if output == '' and process.poll() is not None:
                     break
                 if output:
                     self.output_signal.emit(output.strip())
-            
-            # Check for remaining stderr
-            err = process.stderr.read()
-            if err:
-                self.error_signal.emit(err.strip())
-                
+
             rc = process.poll()
             self.finished_signal.emit(rc)
-            
+
         except Exception as e:
             self.error_signal.emit(str(e))
             self.finished_signal.emit(-1)

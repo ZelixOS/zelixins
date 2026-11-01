@@ -1,0 +1,15 @@
+{
+  "KPackageStructure": "Plasma/LookAndFeel",
+  "KPlugin": {
+    "Id": "org.zelixos.aurora.desktop",
+    "Name": "Zelix Aurora",
+    "Description": "ZelixOS dark appearance with white accents",
+    "Version": "1.0",
+    "License": "GPL-3.0-or-later",
+    "Authors": [
+      {
+        "Name": "ZelixOS"
+      }
+    ]
+  }
+}

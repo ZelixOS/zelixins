@@ -119,7 +119,7 @@ ForegroundVisited=180,180,185
 
 [General]
 AccentColor=255,255,255
-ColorScheme=BreezeDark
+ColorScheme=ZelixAurora
 LastUsedCustomAccentColor=255,255,255
 font=Noto Sans,10,-1,5,50,0,0,0,0,0
 fixed=Noto Sans Mono,10,-1,5,50,0,0,0,0,0
@@ -132,7 +132,7 @@ windowTitleFont=Noto Sans,10,-1,5,63,0,0,0,0,0
 Theme=breeze-dark
 
 [KDE]
-ColorScheme=BreezeDark
-LookAndFeelPackage=org.kde.breezedark.desktop
+ColorScheme=ZelixAurora
+LookAndFeelPackage=org.zelixos.aurora.desktop
 SingleClick=false
 ShowDeleteCommand=true

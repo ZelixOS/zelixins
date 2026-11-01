@@ -123,6 +123,7 @@ class UpdaterWindow(QMainWindow):
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
         self.process.readyReadStandardError.connect(self.handle_stderr)
         self.process.finished.connect(self.process_finished)
+        self.process.errorOccurred.connect(self.process_error)
 
         # Run pkexec pacman -Syu --noconfirm
         self.process.start("pkexec", ["pacman", "-Syu", "--noconfirm"])
@@ -176,10 +177,16 @@ class UpdaterWindow(QMainWindow):
             if 0 <= pct <= 100:
                 self.progress_bar.setValue(pct)
 
+    def process_error(self, error):
+        if error == QProcess.ProcessError.FailedToStart:
+            self.update_button.setEnabled(True)
+            self.status_label.setText("Update process could not start.")
+            self.append_log(self.process.errorString())
+
     def process_finished(self, exit_code, exit_status):
         self.update_button.setEnabled(True)
         
-        if exit_code == 0:
+        if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
             self.update_button.setText("Update Finished")
             self.status_label.setText("System update completed successfully!")
             self.progress_bar.setValue(100)

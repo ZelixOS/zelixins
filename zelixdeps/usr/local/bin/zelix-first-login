@@ -1,0 +1,26 @@
+#!/bin/bash
+# Apply once per user, inside a running Plasma session. Retry after failures.
+set -Eeuo pipefail
+case ":${XDG_CURRENT_DESKTOP:-}:" in *:KDE:*) ;; *) exit 0;; esac
+STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/zelix
+mkdir -p "$STATE_DIR"
+exec 9> "$STATE_DIR/appearance.lock"
+flock -n 9 || exit 0
+[[ -f $STATE_DIR/aurora-v1.done ]] && exit 0
+exec >> "$STATE_DIR/appearance.log" 2>&1
+trap 'echo "ERROR: Aurora setup failed at line $LINENO; will retry next login"' ERR
+ready=false
+for (( i=0; i<30; i++ )); do
+    if busctl --user status org.kde.plasmashell >/dev/null 2>&1; then ready=true; break; fi
+    sleep 1
+done
+[[ $ready == true ]] || { echo 'Plasma session unavailable; will retry next login'; exit 1; }
+plasma-apply-lookandfeel --apply org.zelixos.aurora.desktop
+# The CLI's accent mode ignores the positional scheme; apply them separately.
+plasma-apply-colorscheme ZelixAurora
+plasma-apply-colorscheme --accent-color '#ffffff'
+kwriteconfig6 --file kdeglobals --group General --key AccentColor '255,255,255'
+plasma-apply-wallpaperimage /usr/share/wallpapers/Zelix/minimalistic.png
+kwriteconfig6 --file kdeglobals --group General --key LastUsedCustomAccentColor '255,255,255'
+touch "$STATE_DIR/aurora-v1.done"
+echo 'Zelix Aurora appearance applied successfully.'

@@ -1,7 +1,7 @@
 import os
 import shutil
 import subprocess
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QPushButton, 
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QPushButton,
                              QGroupBox, QMessageBox, QPlainTextEdit, QHBoxLayout)
 from PyQt6.QtCore import Qt
 from utils.command_runner import CommandRunner
@@ -14,12 +14,12 @@ class SystemTab(QWidget):
         self._init_ui()
         self.runner = None
         Translator.add_listener(self)
-        
+
     def _init_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        
+
         # Header with back button
         header_layout = QHBoxLayout()
         self.btn_back = QPushButton()
@@ -28,50 +28,50 @@ class SystemTab(QWidget):
         header_layout.addWidget(self.btn_back)
         header_layout.addStretch()
         layout.addLayout(header_layout)
-        
+
         self.title = QLabel()
         self.title.setObjectName("title_label")
         layout.addWidget(self.title)
-        
+
         # Updates Group
         self.update_group = QGroupBox()
         update_layout = QVBoxLayout(self.update_group)
-        
+
         self.btn_update = QPushButton()
         self.btn_update.setObjectName("primary_btn")
         self.btn_update.clicked.connect(self.run_update)
-        
+
         self.btn_updater_gui = QPushButton()
         self.btn_updater_gui.clicked.connect(self.launch_zelix_updater)
-        
+
         update_layout.addWidget(self.btn_update)
         update_layout.addWidget(self.btn_updater_gui)
-        
+
         layout.addWidget(self.update_group)
-        
+
         # Maintenance Group
         self.maint_group = QGroupBox()
         maint_layout = QVBoxLayout(self.maint_group)
-        
+
         self.btn_clear_cache = QPushButton()
         self.btn_clear_cache.clicked.connect(lambda: self.run_command(["pacman", "-Sc", "--noconfirm"]))
-        
+
         self.btn_remove_orphans = QPushButton()
         self.btn_remove_orphans.clicked.connect(self.run_remove_orphans)
-        
+
         self.btn_optimize_mirrors = QPushButton()
         self.btn_optimize_mirrors.clicked.connect(self.run_optimize_mirrors)
-        
+
         self.btn_enable_flathub = QPushButton()
         self.btn_enable_flathub.clicked.connect(self.enable_flathub)
-        
+
         maint_layout.addWidget(self.btn_clear_cache)
         maint_layout.addWidget(self.btn_remove_orphans)
         maint_layout.addWidget(self.btn_optimize_mirrors)
         maint_layout.addWidget(self.btn_enable_flathub)
-        
+
         layout.addWidget(self.maint_group)
-        
+
         # Terminal Output Area
         self.lbl_terminal = QLabel()
         self.terminal_output = QPlainTextEdit()
@@ -79,7 +79,7 @@ class SystemTab(QWidget):
         self.terminal_output.setStyleSheet("background-color: #000000; color: #00FF00; font-family: monospace;")
         layout.addWidget(self.lbl_terminal)
         layout.addWidget(self.terminal_output)
-        
+
         self.retranslate_ui()
 
     def set_buttons_enabled(self, enabled):
@@ -105,7 +105,7 @@ class SystemTab(QWidget):
 
     def log_output(self, text):
         self.terminal_output.appendPlainText(text)
-        
+
     def launch_zelix_updater(self):
         if shutil.which("zelix-updater"):
             subprocess.Popen(["zelix-updater"])
@@ -125,7 +125,7 @@ class SystemTab(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             self.terminal_output.clear()
             self.run_command(["pacman", "-Syu", "--noconfirm"])
-        
+
     def run_remove_orphans(self):
         self.terminal_output.clear()
         command = [
@@ -133,7 +133,7 @@ class SystemTab(QWidget):
             "orphans=$(pacman -Qdtq); if [ -n \"$orphans\" ]; then echo \"$orphans\" | pkexec pacman -Rns - --noconfirm; else echo 'No orphan packages found.'; fi"
         ]
         self.run_command(command, use_pkexec=False)
-        
+
     def get_user_country(self):
         for var in ['LANG', 'LC_ADDRESS', 'LC_ALL']:
             val = os.environ.get(var)
@@ -163,7 +163,7 @@ class SystemTab(QWidget):
             cmd_str = f"rate-mirrors --allow-root --entry-country {country} arch > /etc/pacman.d/mirrorlist"
         else:
             cmd_str = "rate-mirrors --allow-root arch > /etc/pacman.d/mirrorlist"
-            
+
         command = ["bash", "-c", cmd_str]
         self.run_command(command, use_pkexec=True)
 
@@ -176,7 +176,7 @@ class SystemTab(QWidget):
         )
         command = ["bash", "-c", cmd_str]
         self.run_command(command, use_pkexec=False)
-        
+
     def run_command(self, cmd_list, use_pkexec=True):
         self.set_buttons_enabled(False)
         self.log_output(f"[{Translator.get('status_running')}]")
@@ -185,7 +185,7 @@ class SystemTab(QWidget):
         self.runner.error_signal.connect(self.log_output)
         self.runner.finished_signal.connect(self.on_finished)
         self.runner.start()
-        
+
     def on_finished(self, rc):
         self.set_buttons_enabled(True)
         if rc == 0:
