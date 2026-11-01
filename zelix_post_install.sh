@@ -2,12 +2,14 @@
 # Called only after archinstall succeeds. Arguments are passed as an argv list.
 set -Eeuo pipefail
 if (( $# < 8 )); then
-    echo 'Usage: postinstall ROOT BOOT HOME_OR_DASH DEPS DESKTOP GREETER BOOTLOADER MULTILIB [PACKAGES...]' >&2
+    echo 'Usage: postinstall ROOT BOOT HOME_OR_DASH DEPS DESKTOPS_CSV GREETER BOOTLOADER MULTILIB [PACKAGES...]' >&2
     exit 2
 fi
 ROOT_PART=$1 BOOT_PART=$2 HOME_PART=$3 DEPS_PATH=$4
-DESKTOP=$5 GREETER=$6 BOOTLOADER=$7 MULTILIB=$8
+DESKTOPS=$5 GREETER=$6 BOOTLOADER=$7 MULTILIB=$8
 shift 8
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+python "$SCRIPT_DIR/desktop_setup.py" validate "$DESKTOPS" "$GREETER"
 [[ $EUID == 0 && -d "$DEPS_PATH" ]] || exit 2
 case "$GREETER" in sddm|gdm|lightdm-gtk-greeter|ly) ;; *) exit 2;; esac
 case "$MULTILIB" in true|false) ;; *) exit 2;; esac
@@ -45,7 +47,7 @@ if [[ $GREETER == sddm ]]; then
     cp -a "$DEPS_PATH/etc/sddm.conf" "$TARGET/etc/"
     cp -a "$DEPS_PATH/etc/sddm.conf.d/." "$TARGET/etc/sddm.conf.d/"
 fi
-if [[ $DESKTOP == 'KDE Plasma' ]]; then
+if [[ ,$DESKTOPS, == *,kde-plasma,* ]]; then
     mkdir -p "$TARGET/etc/skel/.config"
     cp -a "$DEPS_PATH/etc/skel/.config/." "$TARGET/etc/skel/.config/"
     install -m644 "$DEPS_PATH/etc/xdg/autostart/zelix-firstrun-wallpaper.desktop" "$TARGET/etc/xdg/autostart/"
@@ -60,6 +62,7 @@ else
     # Plasma update scripts must not overwrite a future, manually installed KDE session.
     rm -f "$TARGET/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/00-zelix-wallpaper.js"
 fi
+python "$SCRIPT_DIR/desktop_setup.py" install "$TARGET" "$SCRIPT_DIR" "$DESKTOPS" "$GREETER"
 cat > "$TARGET/etc/os-release" <<'EOF'
 NAME="ZelixOS"
 PRETTY_NAME="ZelixOS Aurora"
@@ -72,7 +75,6 @@ EOF
 printf 'DISTRIB_ID=ZelixOS\nDISTRIB_RELEASE=rolling\nDISTRIB_DESCRIPTION="ZelixOS Aurora"\n' > "$TARGET/etc/lsb-release"
 printf 'ZelixOS Aurora \\l\n' > "$TARGET/etc/issue"
 # Enforce the same multilib decision in every installation phase.
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 python - "$TARGET/etc/pacman.conf" "$MULTILIB" "$SCRIPT_DIR" <<'PYCODE'
 import sys
 from pathlib import Path
@@ -95,7 +97,23 @@ if (( $# )); then
 fi
 SERVICE=$GREETER
 [[ $GREETER == lightdm-gtk-greeter ]] && SERVICE=lightdm
-# archinstall selected the greeter; explicitly preserve that service selection.
+if [[ $GREETER == ly ]]; then
+    if [[ -f $TARGET/usr/lib/systemd/system/ly@.service ]]; then
+        SERVICE=ly@tty1
+        arch-chroot "$TARGET" systemctl disable getty@tty1.service
+    else
+        SERVICE=ly
+    fi
+fi
+# Some DE profiles install their own display managers. Enable exactly the chosen one.
+for other in sddm gdm lightdm plasmalogin ly ly@tty1; do
+    [[ $other == "$SERVICE" ]] && continue
+    unit=$other
+    [[ $other == ly@tty1 ]] && unit=ly@
+    if [[ -f $TARGET/usr/lib/systemd/system/$unit.service ]]; then
+        arch-chroot "$TARGET" systemctl disable "$other.service"
+    fi
+done
 arch-chroot "$TARGET" systemctl enable "$SERVICE.service"
 arch-chroot "$TARGET" systemctl set-default graphical.target
 

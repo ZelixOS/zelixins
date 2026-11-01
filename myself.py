@@ -10,6 +10,8 @@ import urllib.request
 import tempfile
 from installer_support import (selected_greeter, validate_choices, build_partitions,
                                partition_path, ZELIX_PACKAGES)
+from desktop_catalog import DESKTOPS, desktops_for, appearance_packages
+from desktop_page import DesktopPage
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QStackedWidget, QFrame, QComboBox, QHBoxLayout,
@@ -32,12 +34,13 @@ LANGUAGES = {
         # Sidebar steps
         "step_1": "1. Hoş Geldiniz",
         "step_2": "2. Sistem Ayarları",
-        "step_3": "3. Ayna Seçimi",
-        "step_4": "4. Disk Seçimi",
-        "step_5": "5. Kullanıcılar",
-        "step_6": "6. Ekstra Paketler",
-        "step_7": "7. Özet",
-        "step_8": "8. Kurulum",
+        "step_3": "3. Masaüstü Ortamları",
+        "step_4": "4. Ayna Seçimi",
+        "step_5": "5. Disk Seçimi",
+        "step_6": "6. Kullanıcılar",
+        "step_7": "7. Ekstra Paketler",
+        "step_8": "8. Özet",
+        "step_9": "9. Kurulum",
 
         # Navigation
         "back": "GERİ",
@@ -163,12 +166,13 @@ LANGUAGES = {
         # Sidebar steps
         "step_1": "1. Welcome",
         "step_2": "2. System Settings",
-        "step_3": "3. Mirror Selection",
-        "step_4": "4. Disk Selection",
-        "step_5": "5. Users",
-        "step_6": "6. Extra Packages",
-        "step_7": "7. Summary",
-        "step_8": "8. Installation",
+        "step_3": "3. Desktop Environments",
+        "step_4": "4. Mirror Selection",
+        "step_5": "5. Disk Selection",
+        "step_6": "6. Users",
+        "step_7": "7. Extra Packages",
+        "step_8": "8. Summary",
+        "step_9": "9. Installation",
 
         # Navigation
         "back": "BACK",
@@ -567,12 +571,6 @@ class SystemConfigPage(InstallerPage):
         self.form_layout = QFormLayout()
         self.form_layout.setSpacing(20)
 
-        # Desktop Environment
-        self.de_label = QLabel()
-        self.de_combo = QComboBox()
-        self.de_combo.addItems(["KDE Plasma", "GNOME", "Xfce4", "Hyprland", "Sway", "i3-wm", "bspwm" ] )
-        self.form_layout.addRow(self.de_label, self.de_combo)
-
         # Keyboard Layout
         self.kb_label = QLabel()
         self.kb_combo = QComboBox()
@@ -607,15 +605,6 @@ class SystemConfigPage(InstallerPage):
         if not is_uefi():
             self.bootloader_combo.setCurrentIndex(1)
         self.form_layout.addRow(self.bootloader_label, self.bootloader_combo)
-
-        # Greeter Selection
-        self.greeter_label = QLabel()
-        self.greeter_combo = QComboBox()
-        # Default option + common ones
-        self.greeter_combo.addItem("Default (DE Dependent)", "default")
-        for greeter in ("sddm", "gdm", "lightdm-gtk-greeter", "ly"):
-            self.greeter_combo.addItem(greeter, greeter)
-        self.form_layout.addRow(self.greeter_label, self.greeter_combo)
 
         self.main_layout.addLayout(self.form_layout)
         
@@ -700,7 +689,6 @@ class SystemConfigPage(InstallerPage):
 
     def retranslate(self):
         self.title_label.setText(get_text("sys_title"))
-        self.de_label.setText(get_text("desktop_env"))
         self.kb_label.setText(get_text("keyboard"))
         self.tz_label.setText(get_text("timezone"))
         self.kernel_label.setText(get_text("kernel"))
@@ -708,7 +696,6 @@ class SystemConfigPage(InstallerPage):
         hint = " (Ctrl+Click)" if _current_lang == "en" else " (Ctrl+Tıkla)"
         self.kernel_label.setText(get_text("kernel").rstrip(":") + hint + ":")
         self.bootloader_label.setText(get_text("bootloader"))
-        self.greeter_label.setText(get_text("greeter"))
         self.back_btn.setText(get_text("back"))
         self.next_btn.setText(get_text("next"))
         if not is_uefi():
@@ -1268,12 +1255,12 @@ class SummaryPage(InstallerPage):
         )
 
     def update_summary(self):
-        # Page index map: 0=Welcome, 1=System, 2=Mirror, 3=Disk, 4=User, 5=Extra, 6=Summary, 7=Install
-        sys_page    = self.main_window.pages[1]   # SystemConfigPage
-        mirror_page = self.main_window.pages[2]   # MirrorConfigPage
-        disk_page   = self.main_window.pages[3]   # DiskConfigPage
-        user_page   = self.main_window.pages[4]   # UserAccountPage
-        extra_page  = self.main_window.pages[5]   # ExtraPackagesPage
+        # Pages are named so adding selection steps cannot redirect installation actions.
+        sys_page    = self.main_window.system_page   # SystemConfigPage
+        mirror_page = self.main_window.mirror_page   # MirrorConfigPage
+        disk_page   = self.main_window.disk_page   # DiskConfigPage
+        user_page   = self.main_window.user_page   # UserAccountPage
+        extra_page  = self.main_window.extra_page   # ExtraPackagesPage
 
         disk_sel       = disk_page.disk_combo.currentText()
         mirrors        = ", ".join(mirror_page.get_selected_regions()) or get_text("worldwide")
@@ -1282,7 +1269,7 @@ class SummaryPage(InstallerPage):
             if d in {i.text() for i in sys_page.kernel_list.selectedItems()}
         ) or "linux"
         bootloader_sel = sys_page.bootloader_combo.currentText()
-        greeter_sel    = sys_page.greeter_combo.currentText()
+        greeter_sel    = self.main_window.desktop_page.greeter_combo.currentText()
         root_pw_status = (
             f'<span style="color:#2ecc71;">&#10003; {get_text("summary_root_set")}</span>'
             if user_page.root_pass.text()
@@ -1335,7 +1322,7 @@ class SummaryPage(InstallerPage):
         <table width="100%" cellspacing="0" cellpadding="0">
           {self._section(sec_system)}
           {self._row(get_text('summary_desktop').replace('<b>','').replace('</b>',''),
-                     sys_page.de_combo.currentText())}
+                     ", ".join(self.main_window.desktop_page.selected_desktops()))}
           {self._row(get_text('summary_kb_tz').replace('<b>','').replace('</b>',''),
                      f"{sys_page.kb_combo.currentText()} &nbsp;/&nbsp; {sys_page.tz_combo.currentText()}")}
           {self._row(get_text('summary_mirrors').replace('<b>','').replace('</b>',''), mirrors)}
@@ -1370,7 +1357,7 @@ class SummaryPage(InstallerPage):
         reply = QMessageBox.question(
             self,
             get_text("confirm_title"),
-            get_text("confirm_msg") + "\n\n" + self.main_window.pages[3].disk_combo.currentText(),
+            get_text("confirm_msg") + "\n\n" + self.main_window.disk_page.disk_combo.currentText(),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -1378,15 +1365,15 @@ class SummaryPage(InstallerPage):
         if reply == QMessageBox.StandardButton.Yes:
             if not self.generate_json():
                 return
-            self.main_window.next_page()          # Move to install progress page (index 7)
-            self.main_window.pages[7].start_installation()
+            self.main_window.next_page()          # Move to install progress page
+            self.main_window.install_page.start_installation()
 
     @staticmethod
-    def _build_package_list(sys_page, extra_packages=None) -> list:
+    def _build_package_list(sys_page, desktop_names, greeter, extra_packages=None) -> list:
         """Builds the package list dynamically based on bootloader, DE, and user selections."""
         base_packages = [
             "firefox", "dolphin", "konsole", "python-pyqt6", "sudo", "plymouth",
-            "qt6-svg", "qt6-5compat", "qt5-quickcontrols2", "qt5-graphicaleffects",
+            "qt6-svg", "qt6-imageformats", "qt6-5compat", "qt5-quickcontrols2", "qt5-graphicaleffects",
             "fastfetch"
         ]
 
@@ -1398,8 +1385,9 @@ class SummaryPage(InstallerPage):
             base_packages.append("refind")
         # Systemd-boot doesn't need extra packages
 
-        greeter = selected_greeter(sys_page.de_combo.currentText(),
-                                   sys_page.greeter_combo.currentData())
+        base_packages.extend(appearance_packages(desktop_names))
+        if {"Hyprland", "Sway"}.intersection(desktop_names):
+            base_packages.append("polkit")
         if greeter == "lightdm-gtk-greeter":
             base_packages.extend(["lightdm", greeter])
         else:
@@ -1453,11 +1441,11 @@ class SummaryPage(InstallerPage):
 
     def generate_json(self):
         """Generates archinstall 4.x-compatible config and creds JSON files."""
-        sys_page    = self.main_window.pages[1]
-        mirror_page = self.main_window.pages[2]
-        disk_page   = self.main_window.pages[3]
-        user_page   = self.main_window.pages[4]
-        extra_page  = self.main_window.pages[5]
+        sys_page    = self.main_window.system_page
+        mirror_page = self.main_window.mirror_page
+        disk_page   = self.main_window.disk_page
+        user_page   = self.main_window.user_page
+        extra_page  = self.main_window.extra_page
 
         # --- Extra packages ---
         extra_packages = extra_page.get_selected_packages()
@@ -1471,11 +1459,11 @@ class SummaryPage(InstallerPage):
 
         # --- Disk info ---
         selected_disk_path = disk_page.disk_combo.currentText().split(" ")[0]
-        selected_de = sys_page.de_combo.currentText()
-
-        greeter = selected_greeter(selected_de, sys_page.greeter_combo.currentData())
+        desktop_page = self.main_window.desktop_page
+        selected_desktops = desktop_page.selected_desktops()
         total_bytes = get_disk_size_bytes(selected_disk_path)
         try:
+            greeter = desktop_page.selected_greeter()
             if not os.path.exists(selected_disk_path):
                 raise ValueError("Hedef disk bulunamadı / Target disk is unavailable.")
             # A mounted target may contain the running/live system or user data.
@@ -1537,7 +1525,7 @@ class SummaryPage(InstallerPage):
             "network_config": {"type": "nm"},
 
             "ntp": True,
-            "packages": self._build_package_list(sys_page, extra_packages),
+            "packages": self._build_package_list(sys_page, selected_desktops, greeter, extra_packages),
             "parallel_downloads": 0,
 
             "additional_repositories": ["multilib"] if multilib_enabled else [],
@@ -1547,7 +1535,10 @@ class SummaryPage(InstallerPage):
                 "greeter": greeter,
                 "profile": {
                     "main": "Desktop",
-                    "details": [selected_de],
+                    "details": [desktop.profile for desktop in desktops_for(selected_desktops)],
+                    "custom_settings": {desktop.profile: {"seat_access": "systemd-logind"}
+                                        for desktop in desktops_for(selected_desktops)
+                                        if desktop.slug in {"hyprland", "sway"}},
                 },
             },
 
@@ -1603,7 +1594,7 @@ class SummaryPage(InstallerPage):
                 "root": partition_path(selected_disk_path, 2),
                 "boot": partition_path(selected_disk_path, 1),
                 "home": partition_path(selected_disk_path, 3) if len(partition_list) == 3 else "-",
-                "desktop": selected_de, "greeter": greeter,
+                "desktops": [desktop.slug for desktop in desktops_for(selected_desktops)], "greeter": greeter,
                 "bootloader": sys_page.selected_bootloader(),
                 "multilib": "true" if multilib_enabled else "false",
                 "packages": [pkg for pkg in extra_packages if pkg in ZELIX_PACKAGES],
@@ -1755,7 +1746,7 @@ class InstallProgressPage(InstallerPage):
         self.process.finished.disconnect(self.process_finished)
         self.process.finished.connect(self.post_install_finished)
         args = [script, target["root"], target["boot"], target["home"], deps,
-                target["desktop"], target["greeter"], target["bootloader"], target["multilib"],
+                ",".join(target["desktops"]), target["greeter"], target["bootloader"], target["multilib"],
                 *target["packages"]]
         self.process.start("/bin/bash" if os.geteuid() == 0 else "pkexec",
                            args if os.geteuid() == 0 else ["/bin/bash", *args])
@@ -1781,7 +1772,7 @@ class InstallProgressPage(InstallerPage):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.1.8")
+        self.setWindowTitle("ZelixOS Installer v1.2.0")
         for icon_candidate in (
             "/usr/share/zelix/zelix-installer.png",
             "/usr/share/pixmaps/zelix-installer.png",
@@ -1833,7 +1824,7 @@ class MainWindow(QWidget):
         sidebar_layout.addSpacing(40)
 
         # Step labels — refreshed by retranslate_all()
-        self.step_labels = [QLabel() for _ in range(8)]
+        self.step_labels = [QLabel() for _ in range(9)]
         for lbl in self.step_labels:
             sidebar_layout.addWidget(lbl)
 
@@ -1849,15 +1840,19 @@ class MainWindow(QWidget):
         self.stacked_widget = QStackedWidget()
 
         self.pages = [
-            WelcomePage(self),          # 0
-            SystemConfigPage(self),     # 1
-            MirrorConfigPage(self),     # 2
-            DiskConfigPage(self),       # 3
-            UserAccountPage(self),      # 4
-            ExtraPackagesPage(self),    # 5
-            SummaryPage(self),          # 6
-            InstallProgressPage(self),  # 7
+            WelcomePage(self),
+            SystemConfigPage(self),
+            DesktopPage(self, get_text, lambda: _current_lang),
+            MirrorConfigPage(self),
+            DiskConfigPage(self),
+            UserAccountPage(self),
+            ExtraPackagesPage(self),
+            SummaryPage(self),
+            InstallProgressPage(self),
         ]
+        for name, page in zip(("welcome_page", "system_page", "desktop_page", "mirror_page",
+                               "disk_page", "user_page", "extra_page", "summary_page", "install_page"), self.pages):
+            setattr(self, name, page)
         for page in self.pages:
             self.stacked_widget.addWidget(page)
 
@@ -1945,7 +1940,7 @@ class MainWindow(QWidget):
         self.install_creds_path = None
 
     def closeEvent(self, event):
-        progress = self.pages[7]
+        progress = self.install_page
         if progress.process.state() != QProcess.ProcessState.NotRunning:
             QMessageBox.warning(self, "Kurulum / Installation", "İşlem sürüyor / Installation is still running.")
             event.ignore()
@@ -1955,7 +1950,7 @@ class MainWindow(QWidget):
 
     def retranslate_all(self):
         """Re-applies all translatable strings to every page and sidebar."""
-        step_keys = ["step_1", "step_2", "step_3", "step_4", "step_5", "step_6", "step_7", "step_8"]
+        step_keys = [f"step_{i}" for i in range(1, len(self.pages)+1)]
         for lbl, key in zip(self.step_labels, step_keys):
             lbl.setText(get_text(key))
 
@@ -1966,16 +1961,22 @@ class MainWindow(QWidget):
 
     def next_page(self):
         idx = self.stacked_widget.currentIndex()
+        if self.stacked_widget.currentWidget() is self.desktop_page:
+            try:
+                self.desktop_page.selected_greeter()
+            except ValueError as error:
+                QMessageBox.warning(self, get_text("greeter"), str(error))
+                return
         if idx < self.stacked_widget.count() - 1:
-            if idx + 1 == 6:  # Summary page is at index 6
-                self.pages[6].update_summary()
+            if self.pages[idx+1] is self.summary_page:
+                self.summary_page.update_summary()
             self.stacked_widget.setCurrentIndex(idx + 1)
             self.update_sidebar()
 
     def prev_page(self):
         idx = self.stacked_widget.currentIndex()
-        # Block going back once installation has started (page 7)
-        if idx > 0 and idx != 7:
+        # Block going back once installation has started.
+        if idx > 0 and self.stacked_widget.currentWidget() is not self.install_page:
             self.stacked_widget.setCurrentIndex(idx - 1)
             self.update_sidebar()
 

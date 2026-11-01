@@ -1,17 +1,16 @@
 """Side-effect-free policy shared by the installer and its tests."""
 import uuid
 
-GREETERS = {'KDE Plasma': 'sddm', 'GNOME': 'gdm', 'Xfce4': 'lightdm-gtk-greeter',
-            'Hyprland': 'sddm', 'Sway': 'lightdm-gtk-greeter',
-            'i3-wm': 'lightdm-gtk-greeter', 'bspwm': 'sddm'}
-GREETER_SERVICES = {'sddm': 'sddm', 'gdm': 'gdm', 'lightdm-gtk-greeter': 'lightdm', 'ly': 'ly'}
+from desktop_catalog import DESKTOPS, GREETER_SERVICES, choose_greeter
+
+GREETERS = {desktop.name: desktop.recommended for desktop in DESKTOPS}
 MULTILIB_PACKAGES = {'steam'}
 ZELIX_PACKAGES = {'yay', 'paru', 'zelix-hello', 'zelix-updater', 'mkinitcpio-openswap',
                   'alci-calamares', 'calamares', 'ckbcomp', 'gquick-git', 'qrun-code-git'}
 
 
-def selected_greeter(desktop, choice):
-    return GREETERS[desktop] if choice == 'default' else choice
+def selected_greeter(desktops, choice):
+    return choose_greeter(desktops, choice)
 
 
 def validate_choices(size_bytes, uefi, bootloader, kernels, multilib, packages):
