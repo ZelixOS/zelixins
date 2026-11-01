@@ -1781,7 +1781,7 @@ class InstallProgressPage(InstallerPage):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.1.7")
+        self.setWindowTitle("ZelixOS Installer v1.1.8")
         for icon_candidate in (
             "/usr/share/zelix/zelix-installer.png",
             "/usr/share/pixmaps/zelix-installer.png",
@@ -1841,7 +1841,8 @@ class MainWindow(QWidget):
 
         # Right content area
         content_frame = QFrame()
-        content_frame.setStyleSheet("background-color: #121318;")
+        content_frame.setObjectName("installer_content")
+        content_frame.setStyleSheet("QFrame#installer_content { background-color: #121318; }")
         content_layout = QVBoxLayout(content_frame)
         content_layout.setContentsMargins(0, 0, 0, 0)
 
