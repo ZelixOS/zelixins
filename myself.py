@@ -1733,13 +1733,17 @@ class InstallProgressPage(InstallerPage):
             return
         try:
             result = subprocess.run(
-                ["lsblk", "--json", "--paths", "--output", "PATH,TYPE", target["disk"]],
+                # PATH alone does not enable lsblk's children hierarchy.
+                ["lsblk", "--json", "--tree", "--paths", "--output", "PATH,TYPE", target["disk"]],
                 capture_output=True, text=True, check=True)
             devices = json.loads(result.stdout)["blockdevices"]
             parts = {c["path"] for d in devices for c in d.get("children", []) if c["type"] == "part"}
             expected = {target[k] for k in ("root", "boot", "home") if target[k] != "-"}
             if not expected.issubset(parts):
-                raise ValueError("Hedef bölümler doğrulanamadı / Could not verify target partitions.")
+                raise ValueError(
+                    "Hedef bölümler doğrulanamadı / Could not verify target partitions. "
+                    f"Disk: {target['disk']}; missing: {', '.join(sorted(expected - parts))}; "
+                    f"found: {', '.join(sorted(parts)) or '-'}")
         except (ValueError, OSError, subprocess.SubprocessError) as e:
             self.install_failed(str(e))
             return
@@ -1772,7 +1776,7 @@ class InstallProgressPage(InstallerPage):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.2.1")
+        self.setWindowTitle("ZelixOS Installer v1.2.2")
         for icon_candidate in (
             "/usr/share/zelix/zelix-installer.png",
             "/usr/share/pixmaps/zelix-installer.png",
