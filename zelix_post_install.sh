@@ -70,6 +70,9 @@ ID=zelixos
 ID_LIKE=arch
 BUILD_ID=rolling
 HOME_URL="https://zelixos.com"
+DOCUMENTATION_URL="https://docs.zelixos.com/"
+SUPPORT_URL="https://www.reddit.com/r/ZelixOS/"
+BUG_REPORT_URL="https://zelixos.com/br.html"
 LOGO=/usr/share/zelix/zelix-icon.png
 EOF
 printf 'DISTRIB_ID=ZelixOS\nDISTRIB_RELEASE=rolling\nDISTRIB_DESCRIPTION="ZelixOS Aurora"\n' > "$TARGET/etc/lsb-release"

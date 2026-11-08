@@ -42,7 +42,7 @@ DESKTOPS = (
             'Materia koyu tema · Adwaita ikonları · Özel duvar kâğıdı',
             'Materia dark theme · Adwaita icons · Dedicated wallpaper'),
     Desktop('hyprland', 'Hyprland', 'Hyprland', 'Wayland', 'sddm',
-            ('sddm', 'ly'), ('swaybg',),
+            ('sddm', 'ly'), ('swaybg', 'waybar', 'wofi'),
             'Dinamik döşeme, klavye odaklı kontrol ve özelleştirilebilir Wayland oturumu.',
             'Dynamic tiling, keyboard-driven control and a customizable Wayland session.',
             'Beyaz odak çerçevesi · Yuvarlatılmış köşeler · Özel duvar kâğıdı',

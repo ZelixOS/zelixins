@@ -1,207 +1,184 @@
-import sys
 import os
-import re
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, 
-    QPushButton, QProgressBar, QTextEdit, QLabel
-)
+import sys
+
 from PyQt6.QtCore import QProcess, Qt
-from PyQt6.QtGui import QFont, QColor, QTextCursor, QIcon
+from PyQt6.QtGui import QCloseEvent, QFont, QIcon
+from PyQt6.QtWidgets import (
+    QApplication, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+    QProgressBar, QPushButton, QTextEdit, QVBoxLayout, QWidget,
+)
+
 
 class UpdaterWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ZelixOS Updater")
-        for icon_candidate in (
-            "/usr/share/zelix/zelix-updater.png",
-            "/usr/share/pixmaps/zelix-updater.png",
-            "/usr/share/zelix/zelix-icon.png",
-        ):
-            if os.path.exists(icon_candidate):
-                self.setWindowIcon(QIcon(icon_candidate))
+        for path in ("/usr/share/zelix/zelix-updater.png", "/usr/share/pixmaps/zelix-updater.png"):
+            if os.path.exists(path):
+                self.setWindowIcon(QIcon(path))
                 break
-        self.resize(720, 520)
-
-        # Monochromatic Minimalist Theme (OLED Black / Pure White)
+        self.resize(760, 560)
         self.setStyleSheet("""
-            QMainWindow {
-                background-color: #0E0F12;
-            }
-            QLabel {
-                color: #FFFFFF;
-                font-family: 'Segoe UI', 'Noto Sans', sans-serif;
-            }
-            QPushButton {
-                background-color: #FFFFFF;
-                color: #000000;
-                font-weight: bold;
-                border: 1px solid #FFFFFF;
-                border-radius: 6px;
-                padding: 10px;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #E0E0E0;
-                border: 1px solid #E0E0E0;
-                color: #000000;
-            }
-            QPushButton:pressed {
-                background-color: #CCCCCC;
-            }
-            QPushButton:disabled {
-                background-color: #18191E;
-                color: #555560;
-                border: 1px solid #24252C;
-            }
-            QProgressBar {
-                border: 1px solid #282932;
-                border-radius: 6px;
-                text-align: center;
-                color: #FFFFFF;
-                background-color: #16171B;
-                font-weight: bold;
-            }
-            QProgressBar::chunk {
-                background-color: #FFFFFF;
-                border-radius: 4px;
-                margin: 1px;
-            }
-            QTextEdit {
-                background-color: #0A0B0E;
-                color: #D8D8E0;
-                border: 1px solid #202126;
-                border-radius: 6px;
-                padding: 8px;
-            }
+            QMainWindow { background: #0e0f12; }
+            QLabel { color: white; font-family: 'Noto Sans', sans-serif; }
+            QPushButton { background: white; color: black; font-weight: bold;
+                border: 1px solid white; border-radius: 6px; padding: 10px; }
+            QPushButton:hover { background: #e0e0e0; }
+            QPushButton:disabled { background: #18191e; color: #777780; border-color: #24252c; }
+            QProgressBar { border: 1px solid #282932; border-radius: 6px;
+                background: #16171b; color: white; text-align: center; }
+            QProgressBar::chunk { background: white; border-radius: 4px; }
+            QTextEdit { background: #0a0b0e; color: #d8d8e0; border: 1px solid #202126;
+                border-radius: 6px; padding: 8px; }
         """)
-
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-
-        layout = QVBoxLayout()
+        central = QWidget()
+        self.setCentralWidget(central)
+        layout = QVBoxLayout(central)
         layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(14)
-        central_widget.setLayout(layout)
-
-        # Title Label
-        self.status_label = QLabel("ZelixOS System Updater")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setStyleSheet("font-size: 22px; font-weight: bold; margin-bottom: 4px;")
+        layout.setSpacing(12)
+        self.status_label = QLabel("Güncellemeleri kontrol edin")
+        self.status_label.setWordWrap(True)
+        self.status_label.setStyleSheet("font-size: 20px; font-weight: bold;")
         layout.addWidget(self.status_label)
-
-        # Progress Bar
+        self.detail_label = QLabel("Resmî depolar ve yapılandırılmış paket depoları kontrol edilir. AUR paketleri dahil değildir.")
+        self.detail_label.setWordWrap(True)
+        layout.addWidget(self.detail_label)
         self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setRange(0, 1)
         self.progress_bar.setValue(0)
-        self.progress_bar.setFixedHeight(22)
+        self.progress_bar.setTextVisible(False)
         layout.addWidget(self.progress_bar)
-
-        # Log View
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
-        font = QFont("Monospace", 10)
-        font.setStyleHint(QFont.StyleHint.TypeWriter)
-        self.log_view.setFont(font)
+        self.log_view.setFont(QFont("Monospace", 10))
         layout.addWidget(self.log_view)
-
-        # Update Button
-        self.update_button = QPushButton("Check & Update System")
-        self.update_button.setFixedHeight(44)
-        self.update_button.clicked.connect(self.start_update)
-        layout.addWidget(self.update_button)
-
-        self.process = None
-
-    def start_update(self):
+        buttons = QHBoxLayout()
+        self.check_button = QPushButton("Güncellemeleri kontrol et")
+        self.check_button.clicked.connect(self.check_updates)
+        self.update_button = QPushButton("Sistemi güncelle")
         self.update_button.setEnabled(False)
-        self.progress_bar.setValue(0)
-        self.log_view.clear()
-        self.status_label.setText("Updating system... Please wait.")
-        self.status_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #FFFFFF; margin-bottom: 4px;")
-        
-        self.process = QProcess()
-        self.process.readyReadStandardOutput.connect(self.handle_stdout)
-        self.process.readyReadStandardError.connect(self.handle_stderr)
+        self.update_button.clicked.connect(self.start_update)
+        buttons.addWidget(self.check_button)
+        buttons.addWidget(self.update_button)
+        layout.addLayout(buttons)
+        self.process = None
+        self.operation = None
+        self.stdout = bytearray()
+        self.stderr = bytearray()
+        self.packages = []
+
+    def set_busy(self, busy):
+        self.check_button.setEnabled(not busy)
+        self.update_button.setEnabled(not busy and bool(self.packages))
+        self.progress_bar.setRange(0, 0 if busy else 1)
+        if not busy:
+            self.progress_bar.setValue(0)
+
+    def run_process(self, operation, program, args):
+        self.operation = operation
+        self.stdout = bytearray()
+        self.stderr = bytearray()
+        self.process = QProcess(self)
+        self.process.readyReadStandardOutput.connect(self.read_stdout)
+        self.process.readyReadStandardError.connect(self.read_stderr)
         self.process.finished.connect(self.process_finished)
         self.process.errorOccurred.connect(self.process_error)
+        self.set_busy(True)
+        self.process.start(program, args)
 
-        # Run pkexec pacman -Syu --noconfirm
-        self.process.start("pkexec", ["pacman", "-Syu", "--noconfirm"])
+    def check_updates(self):
+        self.packages = []
+        self.log_view.clear()
+        self.status_label.setText("Güncellemeler kontrol ediliyor…")
+        self.run_process("check", "checkupdates", [])
 
-    def handle_stdout(self):
-        data = self.process.readAllStandardOutput()
-        stdout = bytes(data).decode("utf8", errors="replace")
-        
-        for line in stdout.split('\n'):
-            if not line:
-                continue
-            
-            clean_line = line.split('\r')[-1].strip()
-            if clean_line:
-                self.append_log(clean_line)
-                self.parse_progress(clean_line)
+    def start_update(self):
+        answer = QMessageBox.question(
+            self, "Güncellemeyi onayla",
+            "Sistem paketleri güncellenecek. İşlem yönetici yetkisi gerektirir ve "
+            "pacman sorularında varsayılan yanıtlar kullanılır. Devam edilsin mi?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.log_view.clear()
+        self.status_label.setText("Sistem güncelleniyor…")
+        self.run_process("update", "pkexec", ["pacman", "-Syu", "--noconfirm"])
 
-    def handle_stderr(self):
-        data = self.process.readAllStandardError()
-        stderr = bytes(data).decode("utf8", errors="replace")
-        
-        for line in stderr.split('\n'):
-            clean_line = line.split('\r')[-1].strip()
-            if clean_line:
-                self.log_view.setTextColor(QColor("#FF5555"))
-                self.log_view.append(clean_line)
-                self.log_view.setTextColor(QColor("#D8D8E0"))
-                cursor = self.log_view.textCursor()
-                cursor.movePosition(QTextCursor.MoveOperation.End)
-                self.log_view.setTextCursor(cursor)
+    def read_stdout(self):
+        data = bytes(self.process.readAllStandardOutput())
+        self.stdout.extend(data)
+        if self.operation == "update":
+            self.append_output(data)
 
-    def append_log(self, text):
-        self.log_view.append(text)
+    def read_stderr(self):
+        data = bytes(self.process.readAllStandardError())
+        self.stderr.extend(data)
+        if self.operation == "update":
+            self.append_output(data)
+
+    def append_output(self, data):
         cursor = self.log_view.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.movePosition(cursor.MoveOperation.End)
+        cursor.insertText(data.decode("utf-8", errors="replace").replace("\r", "\n"))
         self.log_view.setTextCursor(cursor)
-
-    def parse_progress(self, text):
-        match = re.search(r'\(\s*(\d+)/(\d+)\)', text)
-        if match:
-            current = int(match.group(1))
-            total = int(match.group(2))
-            if total > 0:
-                percentage = int((current / total) * 100)
-                self.progress_bar.setValue(percentage)
-                return
-
-        pct_match = re.search(r'(\d{1,3})\s*%', text)
-        if pct_match:
-            pct = int(pct_match.group(1))
-            if 0 <= pct <= 100:
-                self.progress_bar.setValue(pct)
+        self.log_view.ensureCursorVisible()
 
     def process_error(self, error):
         if error == QProcess.ProcessError.FailedToStart:
-            self.update_button.setEnabled(True)
-            self.status_label.setText("Update process could not start.")
-            self.append_log(self.process.errorString())
+            self.status_label.setText("İşlem başlatılamadı.")
+            if self.operation == "check":
+                self.log_view.append("Güncelleme kontrolü başlatılamadı. pacman-contrib ve fakeroot paketlerinin kurulu olduğundan emin olun: sudo pacman -S pacman-contrib fakeroot")
+            else:
+                self.log_view.append(self.process.errorString())
+            self.operation = None
+            self.set_busy(False)
 
-    def process_finished(self, exit_code, exit_status):
-        self.update_button.setEnabled(True)
-        
-        if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
-            self.update_button.setText("Update Finished")
-            self.status_label.setText("System update completed successfully!")
-            self.progress_bar.setValue(100)
-            self.status_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #FFFFFF; margin-bottom: 4px;")
-        elif exit_code in (126, 127):
-            self.update_button.setText("Retry Update")
-            self.status_label.setText("Authorization was cancelled or denied.")
-            self.status_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #FFAA00; margin-bottom: 4px;")
-            self.append_log("[!] Update cancelled: administrator privileges were not granted.")
+    def process_finished(self, code, exit_status):
+        self.read_stdout()
+        self.read_stderr()
+        operation = self.operation
+        self.operation = None
+        success = exit_status == QProcess.ExitStatus.NormalExit
+        if operation == "check":
+            output = self.stdout.decode("utf-8", errors="replace").strip()
+            error = self.stderr.decode("utf-8", errors="replace").strip()
+            if success and code == 0 and output:
+                self.packages = output.splitlines()
+                self.log_view.setPlainText(output)
+                self.status_label.setText(f"{len(self.packages)} paket güncellenebilir.")
+                if error:
+                    self.log_view.append("\n" + error)
+            elif success and code == 2:
+                self.status_label.setText("Sistem güncel görünüyor.")
+                if error:
+                    self.log_view.setPlainText(error)
+            else:
+                self.status_label.setText("Güncellemeler kontrol edilemedi.")
+                self.log_view.setPlainText("\n".join(part for part in (output, error) if part) or f"Hata kodu: {code}")
+        elif operation == "update":
+            self.packages = []
+            if success and code == 0:
+                self.status_label.setText("Güncelleme tamamlandı.")
+                self.log_view.append("\nBazı güncellemelerin etkinleşmesi için sistemi yeniden başlatmanız gerekebilir.")
+            elif success and code in (126, 127):
+                self.status_label.setText("Yetkilendirme iptal edildi veya reddedildi.")
+            else:
+                self.status_label.setText(f"Güncelleme başarısız oldu (kod: {code}).")
+        self.set_busy(False)
+        self.process.deleteLater()
+        self.process = None
+
+    def closeEvent(self, event: QCloseEvent):
+        if self.operation:
+            QMessageBox.information(self, "İşlem sürüyor", "Pencereyi kapatmadan önce işlemin tamamlanmasını bekleyin.")
+            event.ignore()
         else:
-            self.update_button.setText("Retry Update")
-            self.status_label.setText(f"Update failed (code {exit_code})! Please check logs.")
-            self.status_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #FF5555; margin-bottom: 4px;")
+            event.accept()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setDesktopFileName("zelix-updater")
     window = UpdaterWindow()

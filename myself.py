@@ -1374,7 +1374,7 @@ class SummaryPage(InstallerPage):
         base_packages = [
             "firefox", "dolphin", "konsole", "python-pyqt6", "sudo", "plymouth",
             "qt6-svg", "qt6-imageformats", "qt6-5compat", "qt5-quickcontrols2", "qt5-graphicaleffects",
-            "fastfetch"
+            "fastfetch", "pacman-contrib", "fakeroot", "polkit"
         ]
 
         # Add bootloader-specific packages

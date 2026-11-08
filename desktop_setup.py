@@ -87,7 +87,9 @@ def seed_window_manager(target, home, slug, wallpaper):
 })
 hl.on("hyprland.start", function ()
     hl.exec_cmd(''' + command + ''')
+    hl.exec_cmd("waybar")
 end)
+hl.bind("SUPER + SPACE", hl.dsp.exec_cmd("wofi --show drun"))
 ''')
             append_once(config, '-- ZelixOS desktop defaults\ndofile(os.getenv("HOME") .. "/.config/hypr/zelix.lua")')
         else:
@@ -104,7 +106,10 @@ end)
 decoration {
     rounding = 8
 }
-exec-once = swaybg --image ''' + quoted + ' --mode fill\n')
+exec-once = swaybg --image ''' + quoted + ''' --mode fill
+exec-once = waybar
+bind = SUPER, SPACE, exec, wofi --show drun
+''')
             append_once(config, '# ZelixOS desktop defaults\nsource = ~/.config/hypr/zelix.conf')
 
 
