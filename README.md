@@ -1,45 +1,45 @@
 # Zelixins
 
-ZelixOS için Python ve PyQt6 ile yazılmış grafik kurucu. Sistem kurulumu için Archinstall kullanır; kullanıcı, disk, çekirdek, masaüstü ve önyükleyici seçimlerini tek arayüzde toplar.
+The graphical installer for ZelixOS, written in Python and PyQt6. It uses Archinstall and provides a single interface for user accounts, disks, kernels, desktops, and bootloaders.
 
-## Özellikler
+## Features
 
-- Türkçe ve İngilizce arayüz.
-- KDE Plasma, GNOME, Xfce, Hyprland, Sway, i3 ve bspwm seçenekleri.
-- Uyumlu giriş yöneticisi seçimi.
-- Çekirdek, önyükleyici ve ek yazılım seçimi.
-- Kurulum çıktısının arayüzde izlenmesi.
-- Kurulum sonrasında ZelixOS ayarlarının ve uygulama paketlerinin uygulanması.
+- English and Turkish interface.
+- KDE Plasma, GNOME, Xfce, Hyprland, Sway, i3, and bspwm options.
+- Compatible login manager selection.
+- Kernel, bootloader, and additional software selection.
+- Installation output displayed in the interface.
+- ZelixOS settings and application packages applied after installation.
 
-## Çalıştırma
+## Running
 
-Kurucu, ZelixOS canlı oturumunda kullanılmak üzere hazırlanmıştır:
+The installer is intended for the ZelixOS live session:
 
 ```bash
 zelix-installer
 ```
 
-Kaynak dizininden arayüzü başlatmak için:
+To launch the interface from the source directory:
 
 ```bash
 python myself.py
 ```
 
-Python, `python-pyqt6`, `qt6-imageformats`, `archinstall`, `arch-install-scripts`, `polkit` ve `util-linux` gereklidir. Kurulum işlemleri yönetici yetkisi ister.
+Requires Python, `python-pyqt6`, `qt6-imageformats`, `archinstall`, `arch-install-scripts`, `polkit`, and `util-linux`. Installation operations require administrator privileges.
 
-## Disk işlemleri
+## Disk operations
 
-Kurucu seçilen diski silerek kurulum yapar. Mevcut verileri önceden yedekleyin. Manuel bölümleme sunmaz. Disk, BIOS/UEFI ve yeniden başlatma kontrollerini önce sanal makinede yapın.
+Installation erases the selected disk. Back up existing data first. Manual partitioning is not available. Test disk operations, BIOS/UEFI installation, and reboot behavior in a virtual machine before using physical hardware.
 
-## Kaynak düzeni
+## Source structure
 
-| Dosya veya dizin | Görevi |
+| File or directory | Purpose |
 | --- | --- |
-| `myself.py` | Kurulum akışı ve arayüz |
-| `installer_support.py` | Disk ve yapılandırma yardımcıları |
-| `desktop_*.py` | Masaüstü seçenekleri ve görünüm ayarları |
-| `zelix_post_install.sh` | Kurulum sonrası işlemler |
-| `zelixdeps/` | Ortak ayar ve görünüm dosyaları |
-| `backgrounds/`, `previews/`, `icons/` | Arayüz varlıkları |
+| `myself.py` | Installation flow and interface |
+| `installer_support.py` | Disk and configuration helpers |
+| `desktop_*.py` | Desktop options and appearance settings |
+| `zelix_post_install.sh` | Post-installation operations |
+| `zelixdeps/` | Shared configuration and appearance files |
+| `backgrounds/`, `previews/`, `icons/` | Interface assets |
 
-Paket tarifi [zelix-repo](https://github.com/ZelixOS/zelix-repo/tree/main/zelixins) deposundadır.
+The package recipe is maintained in [zelix-repo](https://github.com/ZelixOS/zelix-repo/tree/main/zelixins).
