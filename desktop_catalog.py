@@ -100,10 +100,10 @@ def choose_greeter(names, choice='default'):
     desktops = desktops_for(names)
     common = compatible_greeters(names)
     if not desktops or not common:
-        raise ValueError('En az bir masaüstü ve ortak giriş yöneticisi seçin / Select desktops with a common greeter.')
+        raise ValueError('policy_desktop_none')
     if choice != 'default':
         if choice not in common:
-            raise ValueError('Seçilen giriş yöneticisi tüm masaüstleriyle uyumlu değil / Greeter is not supported by all selected desktops.')
+            raise ValueError('policy_greeter')
         return choice
     # Keep each desktop's recommendation, choosing the first common recommendation.
     return next((desktop.recommended for desktop in desktops if desktop.recommended in common), common[0])

@@ -141,8 +141,9 @@ Rectangle {
 
                     Text {
                         anchors.centerIn: parent
-                        text: "👤"
-                        font.pixelSize: 30
+                        text: "User"
+                        color: root.textSecondary
+                        font.pixelSize: 13
                         visible: userAvatar.status != Image.Ready
                     }
                 }
@@ -228,7 +229,7 @@ Rectangle {
                 // Password show/hide toggle
                 Rectangle {
                     id: showPassToggle
-                    width: 30
+                    width: 44
                     height: 30
                     radius: 6
                     anchors.right: parent.right
@@ -239,8 +240,8 @@ Rectangle {
 
                     Text {
                         anchors.centerIn: parent
-                        text: showPassToggle.checked ? "👁" : "🔒"
-                        font.pixelSize: 13
+                        text: showPassToggle.checked ? "Hide" : "Show"
+                        font.pixelSize: 10
                         color: root.textSecondary
                     }
 
@@ -322,12 +323,6 @@ Rectangle {
                 spacing: 6
 
                 Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "🖥"
-                    font.pixelSize: 13
-                }
-
-                Text {
                     id: sessionText
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.getSessionName(root.sessionIndex)
@@ -367,14 +362,15 @@ Rectangle {
 
             // Suspend
             Rectangle {
-                width: 38; height: 38; radius: 19
+                width: 64; height: 36; radius: 6
                 color: mouseSuspend.containsMouse ? "#2A2A2A" : "transparent"
                 border.color: mouseSuspend.containsMouse ? root.borderFocus : root.borderNormal
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
-                    text: "🌙"
-                    font.pixelSize: 15
+                    text: "Sleep"
+                    color: root.textSecondary
+                    font.pixelSize: 11
                 }
                 MouseArea {
                     id: mouseSuspend; anchors.fill: parent
@@ -385,14 +381,15 @@ Rectangle {
 
             // Reboot
             Rectangle {
-                width: 38; height: 38; radius: 19
+                width: 64; height: 36; radius: 6
                 color: mouseReboot.containsMouse ? "#2A2A2A" : "transparent"
                 border.color: mouseReboot.containsMouse ? root.borderFocus : root.borderNormal
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
-                    text: "🔄"
-                    font.pixelSize: 15
+                    text: "Restart"
+                    color: root.textSecondary
+                    font.pixelSize: 11
                 }
                 MouseArea {
                     id: mouseReboot; anchors.fill: parent
@@ -403,15 +400,15 @@ Rectangle {
 
             // Power Off
             Rectangle {
-                width: 38; height: 38; radius: 19
+                width: 64; height: 36; radius: 6
                 color: mousePower.containsMouse ? "#FFFFFF" : "transparent"
                 border.color: mousePower.containsMouse ? "#FFFFFF" : root.borderNormal
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
-                    text: "⏻"
+                    text: "Shut down"
                     color: mousePower.containsMouse ? "#000000" : root.textSecondary
-                    font.pixelSize: 16
+                    font.pixelSize: 10
                 }
                 MouseArea {
                     id: mousePower; anchors.fill: parent

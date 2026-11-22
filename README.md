@@ -4,7 +4,9 @@ The graphical installer for ZelixOS, written in Python and PyQt6. It uses Archin
 
 ## Features
 
-- English and Turkish interface.
+- English, Turkish, and Spanish interface with an independent installed-system locale.
+- Minimal, Standard, Full Experience, and Custom installation profiles.
+- Ext2/3/4, Btrfs, XFS, and F2FS root and optional separate-home layouts.
 - KDE Plasma, GNOME, Xfce, Hyprland, Sway, i3, and bspwm options.
 - Compatible login manager selection.
 - Kernel, bootloader, and additional software selection.
@@ -25,7 +27,7 @@ To launch the interface from the source directory:
 python myself.py
 ```
 
-Requires Python, `python-pyqt6`, `qt6-imageformats`, `archinstall`, `arch-install-scripts`, `polkit`, and `util-linux`. Installation operations require administrator privileges.
+Requires Python, `python-pyqt6`, `qt6-translations`, `qt6-imageformats`, `archinstall`, `arch-install-scripts`, `polkit`, `util-linux`, and the supported filesystem tools. Installation operations require administrator privileges.
 
 ## Disk operations
 

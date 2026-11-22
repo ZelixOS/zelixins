@@ -1,5 +1,6 @@
 """Multi-desktop selection with optional, user-supplied preview images."""
 from pathlib import Path
+from installer_translations import DESKTOP_ES
 from PyQt6.QtCore import Qt, QSize, QTimer
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
@@ -144,9 +145,8 @@ class DesktopPage(QWidget):
         recommended = choose_greeter(names) if options else None
         self.greeter_combo.blockSignals(True)
         self.greeter_combo.clear()
-        tr = self.language() == 'tr'
         for greeter in options:
-            suffix = (' — Önerilen' if tr else ' — Recommended') if greeter == recommended else ''
+            suffix = ' — ' + self.translate('desktop_recommended') if greeter == recommended else ''
             self.greeter_combo.addItem(GREETER_NAMES[greeter]+suffix, greeter)
         selected = previous if previous in options else recommended
         self.greeter_combo.setCurrentIndex(self.greeter_combo.findData(selected))
@@ -159,14 +159,13 @@ class DesktopPage(QWidget):
             frame.style().unpolish(frame)
             frame.style().polish(frame)
         if not names:
-            message = 'Devam etmek için en az bir masaüstü seçin.' if tr else 'Select at least one desktop to continue.'
+            message = self.translate('desktop_none')
         elif not options:
-            message = 'Seçili masaüstleri için ortak giriş yöneticisi yok; seçimi değiştirin.' if tr else 'No common greeter is available; change the desktop selection.'
+            message = self.translate('desktop_incompatible')
         elif previous and previous not in options:
-            message = 'Önceki giriş yöneticisi yeni seçimle uyumsuzdu; ortak uygun seçenek seçildi.' if tr else 'The previous greeter does not support the new selection; a common option was selected.'
+            message = self.translate('desktop_changed')
         else:
-            message = (f'{len(names)} masaüstü seçili. Yalnızca tümüyle uyumlu giriş yöneticileri gösterilir.' if tr else
-                       f'{len(names)} desktops selected. Only greeters supported by every selection are listed.')
+            message = self.translate('desktop_selected').format(count=len(names))
         self.status.setText(message)
 
     def image_path(self, slug, kind):
@@ -192,9 +191,7 @@ class DesktopPage(QWidget):
                 button = self.cards[desktop.slug][kind]
                 pixmap = QPixmap(str(path)) if path else QPixmap()
                 if pixmap.isNull():
-                    tr = self.language() == 'tr'
-                    text = ('Ekran görüntüsü eklenecek' if tr else 'Screenshot coming soon') if kind == 'preview' else (
-                        'Varsayılan Aurora duvar kâğıdı' if tr else 'Default Aurora wallpaper')
+                    text = self.translate('preview_missing' if kind == 'preview' else 'wallpaper_default')
                     button.setIcon(QIcon())
                     button.setText(text)
                     button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
@@ -205,7 +202,7 @@ class DesktopPage(QWidget):
                     button.setIconSize(QSize(280, 120 if kind == 'preview' else 60))
                     button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
                     button.setEnabled(True)
-                    button.setToolTip('Büyüt / Enlarge')
+                    button.setToolTip(self.translate('preview_enlarge'))
 
     def open_image(self, slug, kind):
         path = self.image_path(slug, kind)
@@ -224,21 +221,21 @@ class DesktopPage(QWidget):
         dialog.exec()
 
     def retranslate(self):
-        tr = self.language() == 'tr'
-        self.title.setText('Masaüstü Ortamları' if tr else 'Desktop Environments')
-        self.subtitle.setText('Bir veya daha fazla masaüstü seç. Giriş ekranında oturumlar arasında geçiş yapabilirsin.' if tr else
-                              'Choose one or more desktops. Switch between installed sessions at the login screen.')
+        language = self.language()
+        self.title.setText(self.translate('desktop_title'))
+        self.subtitle.setText(self.translate('desktop_subtitle'))
         self.greeter_label.setText(self.translate('greeter'))
         self.back_btn.setText(self.translate('back'))
         self.next_btn.setText(self.translate('next'))
         for desktop in DESKTOPS:
             card = self.cards[desktop.slug]
-            card['description'].setText(desktop.description_tr if tr else desktop.description_en)
-            card['greeters_label'].setText(('Giriş: ' if tr else 'Login: ') + ' · '.join(GREETER_NAMES[g] for g in desktop.greeters))
-            card['appearance'].setText(desktop.appearance_tr if tr else desktop.appearance_en)
-            if desktop.slug == 'kde-plasma':
-                card['wallpaper_label'].setText('Mevcut otomatik Aurora duvar kâğıdı' if tr else 'Existing automatic Aurora wallpaper')
-            else:
-                card['wallpaper_label'].setText('ZelixOS duvar kâğıdı' if tr else 'ZelixOS wallpaper')
+            description = desktop.description_tr if language == 'tr' else desktop.description_en
+            appearance = desktop.appearance_tr if language == 'tr' else desktop.appearance_en
+            if language == 'es':
+                description, appearance = DESKTOP_ES[desktop.slug]
+            card['description'].setText(description)
+            card['greeters_label'].setText(self.translate('desktop_login') + ' · '.join(GREETER_NAMES[g] for g in desktop.greeters))
+            card['appearance'].setText(appearance)
+            card['wallpaper_label'].setText(self.translate('wallpaper_default' if desktop.slug == 'kde-plasma' else 'wallpaper_zelix'))
         self.selection_changed()
         self.refresh_assets(force=True)

@@ -8,15 +8,26 @@ import re
 import socket
 import urllib.request
 import tempfile
+import html
+import hashlib
+from install_profiles import PROFILES, COMPONENTS, ZELIX_APPS, preset, effective_components
+from installer_translations import extend_languages, PACKAGE_ES
 from installer_support import (selected_greeter, validate_choices, build_partitions,
-                               partition_path, ZELIX_PACKAGES)
+                               partition_path, ZELIX_PACKAGES, post_install_packages)
 from desktop_catalog import DESKTOPS, desktops_for, appearance_packages
 from desktop_page import DesktopPage
+from installation_type_page import InstallationTypePage
+from bottom_navigation import BottomNavigation
+from language_support import apply_qt_language
+from system_locale import SYSTEM_LANGUAGES, UI_LOCALES
+from disk_page import DiskConfigPage
+from disk_layout import FILESYSTEM_PACKAGES
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QStackedWidget, QFrame, QComboBox, QHBoxLayout,
     QFormLayout, QListWidget, QListWidgetItem, QCheckBox, QMessageBox,
-    QSpacerItem, QSizePolicy, QPlainTextEdit
+    QSpacerItem, QSizePolicy, QPlainTextEdit, QTreeWidget, QTreeWidgetItem,
+    QAbstractItemView
 )
 from PyQt6.QtCore import Qt, QProcess, QTimer
 from PyQt6.QtGui import QPixmap, QIcon
@@ -97,16 +108,37 @@ LANGUAGES = {
         "mirror_desc": "Yükleme hızını artırmak için size en yakın bölgeleri seçin (Örn: Turkey, Germany).",
 
         # ExtraPackagesPage
-        "extra_title": "Ekstra Paket Seçimi",
-        "extra_desc": "Kurulumdan sonra yüklenmesini istediğiniz ek programları seçin. Boş bırakabilirsiniz.",
-        "extra_cat_gaming": "🎮 Oyun",
-        "extra_cat_dev": "🛠️ Geliştirme",
-        "extra_cat_multimedia": "🎬 Multimedya",
-        "extra_cat_office": "📄 Ofis",
-        "extra_cat_internet": "🌐 İnternet",
-        "extra_cat_system": "🔧 Sistem Araçları",
+        "extra_title": "Ek Paketler",
+        "extra_desc": "Kurulumdan sonra yüklenecek uygulamaları seçin. Firefox varsayılan olarak seçilidir.",
+        "extra_cat_browsers": "Tarayıcılar",
+        "extra_cat_communication": "İletişim",
+        "extra_cat_terminals": "Terminal ve Editörler",
+        "extra_cat_graphics": "Grafik",
+        "extra_cat_utilities": "Araçlar",
+        "extra_cat_custom": "Özel Paketler",
+        "extra_cat_gaming": "Oyun",
+        "extra_cat_dev": "Geliştirme",
+        "extra_cat_multimedia": "Multimedya",
+        "extra_cat_office": "Ofis",
+        "extra_cat_system": "Sistem",
         "extra_multilib": "Multilib deposunu etkinleştir (32-bit uygulama desteği, Steam vb. için gerekli)",
-        "extra_selected_count": "{count} paket seçildi",
+        "extra_multilib_steam": "Multilib deposunu etkinleştir (Steam seçiliyken zorunludur)",
+        "extra_selected_count_one": "{count}/{total} paket seçildi",
+        "extra_selected_count": "{count}/{total} paket seçildi",
+        "extra_search": "Uygulama veya paket ara…",
+        "extra_selected_only": "Yalnızca seçilenleri göster",
+        "extra_custom_placeholder": "Depo paket adı yazın (ör. kitty)",
+        "extra_custom_add": "Ekle",
+        "extra_custom_remove": "Kaldır",
+        "extra_custom_invalid": "Geçersiz paket adı. Küçük harf, sayı ve . _ + - karakterlerini kullanın.",
+        "extra_custom_not_found": "“{package}” etkin Arch depolarında bulunamadı.",
+        "extra_custom_exists": "“{package}” zaten listede; paket seçildi.",
+        "extra_custom_check_title": "Paket Doğrulaması",
+        "extra_custom_recheck_failed": "Şu özel paketler artık etkin depolarda bulunamıyor:\n\n{packages}",
+        "extra_source_arch": "Arch",
+        "extra_source_flatpak": "Flatpak",
+        "extra_source_aur": "AUR",
+        "extra_source_zelix": "Zelix Repo",
         "summary_extra_pkgs": "<b>Ekstra Paketler:</b>",
         "summary_multilib": "<b>Multilib:</b>",
         "summary_multilib_on": "Etkin",
@@ -229,16 +261,37 @@ LANGUAGES = {
         "mirror_desc": "Select the nearest regions to increase download speed (e.g. Turkey, Germany).",
 
         # ExtraPackagesPage
-        "extra_title": "Extra Package Selection",
-        "extra_desc": "Select additional programs to install. You can leave this empty.",
-        "extra_cat_gaming": "🎮 Gaming",
-        "extra_cat_dev": "🛠️ Development",
-        "extra_cat_multimedia": "🎬 Multimedia",
-        "extra_cat_office": "📄 Office",
-        "extra_cat_internet": "🌐 Internet",
-        "extra_cat_system": "🔧 System Tools",
+        "extra_title": "Additional Packages",
+        "extra_desc": "Choose applications to install with the system. Firefox is selected by default.",
+        "extra_cat_browsers": "Browsers",
+        "extra_cat_communication": "Communication",
+        "extra_cat_terminals": "Terminals and Editors",
+        "extra_cat_graphics": "Graphics",
+        "extra_cat_utilities": "Utilities",
+        "extra_cat_custom": "Custom Packages",
+        "extra_cat_gaming": "Gaming",
+        "extra_cat_dev": "Development",
+        "extra_cat_multimedia": "Multimedia",
+        "extra_cat_office": "Office",
+        "extra_cat_system": "System",
         "extra_multilib": "Enable multilib repository (32-bit app support, required for Steam etc.)",
-        "extra_selected_count": "{count} packages selected",
+        "extra_multilib_steam": "Enable multilib repository (required while Steam is selected)",
+        "extra_selected_count_one": "{count} of {total} selected",
+        "extra_selected_count": "{count} of {total} selected",
+        "extra_search": "Search applications or packages…",
+        "extra_selected_only": "Show selected only",
+        "extra_custom_placeholder": "Enter a repository package name (e.g. kitty)",
+        "extra_custom_add": "Add",
+        "extra_custom_remove": "Remove",
+        "extra_custom_invalid": "Invalid package name. Use lowercase letters, numbers, and . _ + - characters.",
+        "extra_custom_not_found": "“{package}” was not found in the enabled Arch repositories.",
+        "extra_custom_exists": "“{package}” is already listed; the package was selected.",
+        "extra_custom_check_title": "Package Validation",
+        "extra_custom_recheck_failed": "These custom packages are no longer available in the enabled repositories:\n\n{packages}",
+        "extra_source_arch": "Arch",
+        "extra_source_flatpak": "Flatpak",
+        "extra_source_aur": "AUR",
+        "extra_source_zelix": "Zelix Repo",
         "summary_extra_pkgs": "<b>Extra Packages:</b>",
         "summary_multilib": "<b>Multilib:</b>",
         "summary_multilib_on": "Enabled",
@@ -287,18 +340,21 @@ LANGUAGES = {
     },
 }
 
+extend_languages(LANGUAGES)
+
 # Global language state — pages can access via get_text()
 _current_lang = "en"
 
 
 def get_text(key: str) -> str:
     """Returns the UI string for the current language."""
-    return LANGUAGES.get(_current_lang, LANGUAGES["tr"]).get(key, key)
+    return LANGUAGES.get(_current_lang, LANGUAGES["en"]).get(key, LANGUAGES["en"].get(key, key))
 
 
 def set_language(lang_code: str):
     global _current_lang
     _current_lang = lang_code
+    apply_qt_language(lang_code)
 
 
 # ─────────────────────────────────────────────
@@ -479,6 +535,7 @@ class WelcomePage(InstallerPage):
         self.lang_combo = QComboBox()
         self.lang_combo.addItem("English", "en")
         self.lang_combo.addItem("Türkçe", "tr")
+        self.lang_combo.addItem("Español", "es")
         self.lang_combo.setFixedWidth(120)
         self.lang_combo.currentIndexChanged.connect(self._on_lang_changed)
         lang_row.addWidget(self.lang_label)
@@ -570,6 +627,20 @@ class SystemConfigPage(InstallerPage):
 
         self.form_layout = QFormLayout()
         self.form_layout.setSpacing(20)
+        self.form_layout.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+        )
+
+        self.system_language_label = QLabel()
+        self.system_language_combo = QComboBox()
+        self.system_language_combo.addItem('', 'installer')
+        for name, locale in SYSTEM_LANGUAGES:
+            self.system_language_combo.addItem(name, locale)
+        self.form_layout.addRow(self.system_language_label, self.system_language_combo)
+        self.system_language_note = QLabel()
+        self.system_language_note.setWordWrap(True)
+        self.system_language_note.setStyleSheet('color: #a5afbf; font-size: 11px;')
+        self.form_layout.addRow('', self.system_language_note)
 
         # Keyboard Layout
         self.kb_label = QLabel()
@@ -591,9 +662,14 @@ class SystemConfigPage(InstallerPage):
         self.kernel_label = QLabel()
         self.kernel_list = QListWidget()
         self.kernel_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
-        self.kernel_list.setFixedHeight(88)   # exactly 4 items visible
+        self.kernel_list.setMinimumHeight(148)
+        self.kernel_list.setMaximumHeight(180)
+        self.kernel_list.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         for display, _key in self.KERNELS:
             self.kernel_list.addItem(display)
+            self.kernel_list.item(self.kernel_list.count() - 1).setData(Qt.ItemDataRole.UserRole, _key)
         self.kernel_list.item(0).setSelected(True)  # Linux (Stable) selected by default
         self.form_layout.addRow(self.kernel_label, self.kernel_list)
 
@@ -666,21 +742,21 @@ class SystemConfigPage(InstallerPage):
         self.tz_combo.clear()
         self.tz_combo.addItems(timezones)
         
-        current = get_current_timezone()
-        if current:
-            idx = self.tz_combo.findText(current)
-            if idx >= 0:
-                self.tz_combo.setCurrentIndex(idx)
-        else:
-            idx = self.tz_combo.findText("Europe/Istanbul")
-            if idx >= 0:
-                self.tz_combo.setCurrentIndex(idx)
+        # Use a predictable, location-independent default for new installations.
+        idx = self.tz_combo.findText("UTC")
+        if idx < 0:
+            self.tz_combo.insertItem(0, "UTC")
+            idx = 0
+        self.tz_combo.setCurrentIndex(idx)
 
     def selected_kernels(self) -> list:
         """Returns a list of archinstall kernel package names for all selected items."""
-        selected_displays = {item.text() for item in self.kernel_list.selectedItems()}
-        kernels = [key for display, key in self.KERNELS if display in selected_displays]
+        kernels = [item.data(Qt.ItemDataRole.UserRole) for item in self.kernel_list.selectedItems()]
         return kernels if kernels else ["linux"]
+
+    def selected_system_locale(self):
+        selected = self.system_language_combo.currentData()
+        return UI_LOCALES[_current_lang] if selected == 'installer' else selected
 
     def selected_bootloader(self) -> str:
         """Returns the archinstall bootloader string for the current selection."""
@@ -689,11 +765,16 @@ class SystemConfigPage(InstallerPage):
 
     def retranslate(self):
         self.title_label.setText(get_text("sys_title"))
+        self.system_language_label.setText(get_text('system_language'))
+        self.system_language_combo.setItemText(0, get_text('system_language_follow'))
+        self.system_language_note.setText(get_text('system_language_note'))
         self.kb_label.setText(get_text("keyboard"))
         self.tz_label.setText(get_text("timezone"))
         self.kernel_label.setText(get_text("kernel"))
         # hint text is appended in parentheses
-        hint = " (Ctrl+Click)" if _current_lang == "en" else " (Ctrl+Tıkla)"
+        for index, (_display, key) in enumerate(self.KERNELS):
+            self.kernel_list.item(index).setText(get_text('kernel_' + key))
+        hint = get_text("kernel_hint")
         self.kernel_label.setText(get_text("kernel").rstrip(":") + hint + ":")
         self.bootloader_label.setText(get_text("bootloader"))
         self.back_btn.setText(get_text("back"))
@@ -704,65 +785,6 @@ class SystemConfigPage(InstallerPage):
 
 # ─────────────────────────────────────────────
 #  Disk Config Page
-# ─────────────────────────────────────────────
-
-class DiskConfigPage(InstallerPage):
-    def __init__(self, parent):
-        super().__init__(parent)
-
-        self.title_label = QLabel()
-        self.title_label.setStyleSheet("font-size: 28px; color: #eff0f1; font-weight: bold; margin-bottom: 10px;")
-        self.main_layout.addWidget(self.title_label)
-
-        self.warn_label = QLabel()
-        self.warn_label.setStyleSheet("color: #e74c3c; font-weight: bold; margin-bottom: 20px;")
-        self.warn_label.setWordWrap(True)
-        self.main_layout.addWidget(self.warn_label)
-
-        self.disk_combo = QComboBox()
-        self.refresh_disks()
-
-        self.disk_form = QFormLayout()
-        self.disk_select_label = QLabel()
-        self.disk_form.addRow(self.disk_select_label, self.disk_combo)
-
-        self.refresh_btn = QPushButton()
-        self.refresh_btn.setStyleSheet("background: #1C1D24; border: 1px solid #30313C; color: #FFFFFF; padding: 8px; border-radius: 6px;")
-        self.refresh_btn.clicked.connect(self.refresh_disks)
-        self.disk_form.addRow("", self.refresh_btn)
-
-        self.main_layout.addLayout(self.disk_form)
-        self.main_layout.addStretch()
-
-        nav_layout = QHBoxLayout()
-        self.back_btn = QPushButton()
-        self.back_btn.clicked.connect(lambda: self.main_window.prev_page())
-        self.next_btn = QPushButton()
-        self.next_btn.setObjectName("primary_btn")
-        self.next_btn.clicked.connect(lambda: self.main_window.next_page())
-
-        nav_layout.addWidget(self.back_btn)
-        nav_layout.addStretch()
-        nav_layout.addWidget(self.next_btn)
-        self.main_layout.addLayout(nav_layout)
-
-        self.retranslate()
-
-    def refresh_disks(self):
-        self.disk_combo.clear()
-        self.disk_combo.addItems(scan_disks())
-
-    def retranslate(self):
-        self.title_label.setText(get_text("disk_title"))
-        self.warn_label.setText(get_text("disk_warn"))
-        self.disk_select_label.setText(get_text("disk_select"))
-        self.refresh_btn.setText(get_text("disk_refresh"))
-        self.back_btn.setText(get_text("back"))
-        self.next_btn.setText(get_text("next"))
-
-
-# ─────────────────────────────────────────────
-#  User Account Page
 # ─────────────────────────────────────────────
 
 class UserAccountPage(InstallerPage):
@@ -929,6 +951,10 @@ class UserAccountPage(InstallerPage):
 # ─────────────────────────────────────────────
 
 class MirrorConfigPage(InstallerPage):
+    WORLDWIDE_MIRRORS = [
+        "https://geo.mirror.pkgbuild.com/$repo/os/$arch",
+    ]
+
     def __init__(self, parent):
         super().__init__(parent)
 
@@ -966,9 +992,9 @@ class MirrorConfigPage(InstallerPage):
 
         for display, _key in self.mirror_regions:
             item = QListWidgetItem(display)
+            item.setData(Qt.ItemDataRole.UserRole, _key)
             self.mirror_list.addItem(item)
-            # Default-select Turkey and United States
-            if display in ("Türkiye", "United States"):
+            if display == "Worldwide":
                 item.setSelected(True)
 
         self.main_layout.addWidget(self.mirror_list)
@@ -990,10 +1016,18 @@ class MirrorConfigPage(InstallerPage):
 
     def get_selected_regions(self):
         """Returns the internal (English) keys of selected mirror regions."""
-        selected_display = {item.text() for item in self.mirror_list.selectedItems()}
-        return [key for display, key in self.mirror_regions if display in selected_display]
+        return [item.data(Qt.ItemDataRole.UserRole) for item in self.mirror_list.selectedItems()]
+
+    def get_selected_mirrors(self):
+        """Return selected regions with concrete servers where one is defined."""
+        return {
+            region: list(self.WORLDWIDE_MIRRORS) if region == "Worldwide" else []
+            for region in self.get_selected_regions()
+        }
 
     def retranslate(self):
+        for index, (_display, key) in enumerate(self.mirror_regions):
+            self.mirror_list.item(index).setText(get_text('region_' + key))
         self.title_label.setText(get_text("mirror_title"))
         self.desc_label.setText(get_text("mirror_desc"))
         self.back_btn.setText(get_text("back"))
@@ -1005,58 +1039,137 @@ class MirrorConfigPage(InstallerPage):
 # ─────────────────────────────────────────────
 
 class ExtraPackagesPage(InstallerPage):
-    """Allows users to select optional packages to install, grouped by category."""
+    """Optional packages shown by category."""
 
-    # (category_lang_key, [(display_name, package_name), ...])
+    # name, package, source, Turkish description, English description, default
     PACKAGE_CATEGORIES = [
+        ("extra_cat_browsers", [
+            ("Firefox", "firefox", "extra_source_arch",
+             "Özgür, gizlilik odaklı web tarayıcısı.",
+             "Free, privacy-focused web browser.", True),
+            ("Chromium", "chromium", "extra_source_arch",
+             "Chromium tabanlı hızlı ve sade tarayıcı.",
+             "Fast, minimal Chromium-based browser.", False),
+            ("Falkon", "falkon", "extra_source_arch",
+             "Qt ile geliştirilmiş hafif web tarayıcısı.",
+             "Lightweight web browser built with Qt.", False),
+            ("Tor Browser Launcher", "torbrowser-launcher", "extra_source_arch",
+             "Tor Browser'ı güvenli biçimde indirip başlatır.",
+             "Securely downloads and launches Tor Browser.", False),
+            ("Brave", "aur:brave-bin", "extra_source_aur",
+             "Gizlilik korumaları yerleşik Chromium tabanlı tarayıcı.",
+             "Chromium-based browser with built-in privacy protections.", False),
+            ("LibreWolf", "librewolf", "extra_source_arch",
+             "Firefox tabanlı, gizlilik ve güvenlik odaklı tarayıcı.",
+             "Firefox-based browser focused on privacy and security.", False),
+            ("Helium", "aur:helium-browser-bin", "extra_source_aur",
+             "Gizlilik odaklı, sadeleştirilmiş Chromium tabanlı tarayıcı.",
+             "Privacy-focused, streamlined Chromium-based browser.", False),
+        ]),
+        ("extra_cat_communication", [
+            ("Thunderbird", "thunderbird", "extra_source_arch",
+             "E-posta, takvim ve haber istemcisi.",
+             "Email, calendar, and news client.", False),
+            ("Discord", "discord", "extra_source_arch",
+             "Topluluklar için sesli ve yazılı iletişim.",
+             "Voice and text chat for communities.", False),
+            ("Telegram Desktop", "telegram-desktop", "extra_source_arch",
+             "Telegram'ın resmi masaüstü istemcisi.",
+             "Official Telegram desktop client.", False),
+            ("qBittorrent", "qbittorrent", "extra_source_arch",
+             "Reklamsız, açık kaynak BitTorrent istemcisi.",
+             "Ad-free, open-source BitTorrent client.", False),
+            ("Signal Desktop", "signal-desktop", "extra_source_arch",
+             "Uçtan uca şifreli mesajlaşma istemcisi.",
+             "End-to-end encrypted messaging client.", False),
+            ("Element", "element-desktop", "extra_source_arch",
+             "Matrix ağı için açık kaynak iletişim istemcisi.",
+             "Open-source communication client for Matrix.", False),
+        ]),
+        ("extra_cat_terminals", [
+            ("Alacritty", "alacritty", "extra_source_arch", "GPU hızlandırmalı hızlı terminal emülatörü.", "Fast GPU-accelerated terminal emulator.", False),
+            ("Kitty", "kitty", "extra_source_arch", "GPU hızlandırmalı, özellikli terminal emülatörü.", "Feature-rich GPU-accelerated terminal emulator.", False),
+            ("WezTerm", "wezterm", "extra_source_arch", "Çapraz platform, Lua ile yapılandırılan terminal.", "Cross-platform terminal configured with Lua.", False),
+            ("Foot", "foot", "extra_source_arch", "Wayland için hafif ve hızlı terminal.", "Lightweight and fast terminal for Wayland.", False),
+            ("Ghostty", "ghostty", "extra_source_arch", "Modern, hızlı ve yerel terminal emülatörü.", "Modern, fast, and native terminal emulator.", False),
+            ("Terminator", "terminator", "extra_source_arch", "Bölünebilir çoklu terminal çalışma alanı.", "Multi-terminal workspace with split panes.", False),
+            ("Neovim", "neovim", "extra_source_arch", "Genişletilebilir terminal metin düzenleyicisi.", "Extensible terminal text editor.", False),
+            ("Helix", "helix", "extra_source_arch", "Modern ve modal terminal metin düzenleyicisi.", "Modern modal terminal text editor.", False),
+            ("Kate", "kate", "extra_source_arch", "KDE'nin güçlü grafiksel metin düzenleyicisi.", "Powerful graphical text editor from KDE.", False),
+            ("Geany", "geany", "extra_source_arch", "Hafif kod düzenleyici ve geliştirme ortamı.", "Lightweight code editor and development environment.", False),
+        ]),
         ("extra_cat_gaming", [
-            ("Steam", "steam"),
-            ("Lutris", "lutris"),
-            ("Wine", "wine"),
-            ("GameMode", "gamemode"),
-            ("MangoHud", "mangohud"),
-            ("ProtonUp-Qt", "protonup-qt"),
+            ("Steam", "steam", "extra_source_arch",
+             "Linux oyun mağazası ve oyun kütüphanesi.",
+             "Linux game store and library.", False),
+            ("Lutris", "lutris", "extra_source_arch",
+             "Farklı kaynaklardaki oyunları tek yerde yönetir.",
+             "Manages games from different sources in one place.", False),
+            ("Wine", "wine", "extra_source_arch",
+             "Windows uygulamaları için uyumluluk katmanı.",
+             "Compatibility layer for Windows applications.", False),
+            ("Winetricks", "winetricks", "extra_source_arch",
+             "Wine bileşenlerini ve yaygın çalışma ortamlarını yönetir.",
+             "Manages Wine components and common runtimes.", False),
+            ("GameMode", "gamemode", "extra_source_arch",
+             "Oyun sırasında sistem performansını optimize eder.",
+             "Optimizes system performance while gaming.", False),
+            ("MangoHud", "mangohud", "extra_source_arch",
+             "FPS ve sistem bilgilerini oyun üzerinde gösterir.",
+             "Shows FPS and system information in games.", False),
+            ("ProtonUp-Qt", "flatpak:net.davidotek.pupgui2", "extra_source_flatpak",
+             "Proton-GE gibi uyumluluk araçlarını yönetir.",
+             "Manages compatibility tools such as Proton-GE.", False),
         ]),
         ("extra_cat_dev", [
-            ("Visual Studio Code (OSS)", "code"),
-            ("Git", "git"),
-            ("Base-Devel", "base-devel"),
-            ("Python", "python"),
-            ("Node.js", "nodejs"),
-            ("Docker", "docker"),
-            ("GCC", "gcc"),
+            ("Code (OSS)", "code", "extra_source_arch", "Açık kaynak kod düzenleyici.", "Open-source code editor.", False),
+            ("Git", "git", "extra_source_arch", "Dağıtık sürüm kontrol sistemi.", "Distributed version control system.", False),
+            ("Base-devel", "base-devel", "extra_source_arch", "Arch paketleri derlemek için temel araçlar.", "Core tools for building Arch packages.", False),
+            ("Python", "python", "extra_source_arch", "Python programlama dili ve çalışma ortamı.", "Python language and runtime.", False),
+            ("Node.js", "nodejs", "extra_source_arch", "Sunucu tarafı JavaScript çalışma ortamı.", "Server-side JavaScript runtime.", False),
+            ("Docker", "docker", "extra_source_arch", "Konteyner geliştirme ve çalıştırma platformu.", "Container development and runtime platform.", False),
+            ("GCC", "gcc", "extra_source_arch", "GNU C ve C++ derleyici koleksiyonu.", "GNU C and C++ compiler collection.", False),
         ]),
         ("extra_cat_multimedia", [
-            ("VLC", "vlc"),
-            ("GIMP", "gimp"),
-            ("OBS Studio", "obs-studio"),
-            ("Audacity", "audacity"),
-            ("Kdenlive", "kdenlive"),
-            ("Spotify (Flatpak)", "flatpak:spotify"),
+            ("VLC", "vlc", "extra_source_arch", "Çok formatlı video ve müzik oynatıcı.", "Multi-format video and music player.", False),
+            ("GIMP", "gimp", "extra_source_arch", "Gelişmiş görsel düzenleme uygulaması.", "Advanced image editing application.", False),
+            ("OBS Studio", "obs-studio", "extra_source_arch", "Ekran kaydı ve canlı yayın aracı.", "Screen recording and live streaming tool.", False),
+            ("Audacity", "audacity", "extra_source_arch", "Ses kaydı ve düzenleme uygulaması.", "Audio recording and editing application.", False),
+            ("Kdenlive", "kdenlive", "extra_source_arch", "Doğrusal olmayan video düzenleyici.", "Non-linear video editor.", False),
+            ("Spotify", "flatpak:com.spotify.Client", "extra_source_flatpak", "Müzik ve podcast istemcisi.", "Music and podcast client.", False),
+            ("MPV", "mpv", "extra_source_arch", "Hafif ve güçlü komut satırı medya oynatıcısı.", "Lightweight and powerful command-line media player.", False),
+            ("Celluloid", "celluloid", "extra_source_arch", "MPV için sade grafiksel arayüz.", "Simple graphical interface for MPV.", False),
+            ("HandBrake", "handbrake", "extra_source_arch", "Video dönüştürme ve sıkıştırma aracı.", "Video transcoding and compression tool.", False),
+        ]),
+        ("extra_cat_graphics", [
+            ("Inkscape", "inkscape", "extra_source_arch", "Vektörel çizim ve tasarım uygulaması.", "Vector illustration and design application.", False),
+            ("Krita", "krita", "extra_source_arch", "Dijital çizim ve boyama uygulaması.", "Digital painting and illustration application.", False),
+            ("Blender", "blender", "extra_source_arch", "3B modelleme, animasyon ve render paketi.", "3D modeling, animation, and rendering suite.", False),
         ]),
         ("extra_cat_office", [
-            ("LibreOffice", "libreoffice-fresh"),
-            ("Thunderbird", "thunderbird"),
-            ("Okular (PDF)", "okular"),
-            ("Evince (PDF)", "evince"),
+            ("LibreOffice", "libreoffice-fresh", "extra_source_arch", "Belge, tablo ve sunum ofis paketi.", "Office suite for documents, sheets, and presentations.", False),
+            ("Okular", "okular", "extra_source_arch", "PDF ve belge görüntüleyici.", "PDF and document viewer.", False),
+            ("Evince", "evince", "extra_source_arch", "Sade ve hızlı belge görüntüleyici.", "Simple and fast document viewer.", False),
         ]),
-        ("extra_cat_internet", [
-            ("Discord", "discord"),
-            ("Telegram", "telegram-desktop"),
-            ("qBittorrent", "qbittorrent"),
-            ("Chromium", "chromium"),
+        ("extra_cat_utilities", [
+            ("Flameshot", "flameshot", "extra_source_arch", "Açıklama araçları içeren ekran görüntüsü uygulaması.", "Screenshot tool with annotation features.", False),
+            ("KeePassXC", "keepassxc", "extra_source_arch", "Yerel ve güvenli parola yöneticisi.", "Local and secure password manager.", False),
+            ("FileZilla", "filezilla", "extra_source_arch", "FTP, FTPS ve SFTP dosya aktarım istemcisi.", "FTP, FTPS, and SFTP file transfer client.", False),
+            ("Remmina", "remmina", "extra_source_arch", "Uzak masaüstü bağlantı istemcisi.", "Remote desktop connection client.", False),
+            ("Syncthing", "syncthing", "extra_source_arch", "Eşler arası dosya eşitleme aracı.", "Peer-to-peer file synchronization tool.", False),
         ]),
         ("extra_cat_system", [
-            ("Timeshift", "timeshift"),
-            ("Htop", "htop"),
-            ("Btop", "btop"),
-            ("Fastfetch", "fastfetch"),
-            ("Flatpak", "flatpak"),
-            ("GParted", "gparted"),
-            ("Fish Shell", "fish"),
-            ("Yay (AUR Helper)", "yay"),
-            ("Paru (AUR Helper)", "paru"),
+            ("Timeshift", "timeshift", "extra_source_arch", "Sistem anlık görüntüsü ve geri yükleme aracı.", "System snapshot and restore utility.", False),
+            ("Htop", "htop", "extra_source_arch", "Terminal tabanlı süreç görüntüleyici.", "Terminal-based process viewer.", False),
+            ("Btop", "btop", "extra_source_arch", "Modern kaynak ve süreç izleyicisi.", "Modern resource and process monitor.", False),
+            ("Fastfetch", "fastfetch", "extra_source_arch", "Terminalde sistem bilgilerini gösterir.", "Displays system information in the terminal.", False),
+            ("Flatpak", "flatpak", "extra_source_arch", "Dağıtımdan bağımsız uygulama altyapısı.", "Distribution-independent application platform.", False),
+            ("GParted", "gparted", "extra_source_arch", "Grafiksel disk bölümleme aracı.", "Graphical disk partition editor.", False),
+            ("Fish Shell", "fish", "extra_source_arch", "Kullanıcı dostu komut satırı kabuğu.", "User-friendly command-line shell.", False),
+            ("Yay", "yay", "extra_source_zelix", "AUR paketleri için yardımcı araç.", "Helper for installing AUR packages.", False),
+            ("Paru", "paru", "extra_source_zelix", "Rust ile geliştirilmiş AUR yardımcısı.", "AUR helper written in Rust.", False),
         ]),
+        ("extra_cat_custom", []),
     ]
 
     def __init__(self, parent):
@@ -1071,103 +1184,342 @@ class ExtraPackagesPage(InstallerPage):
         self.desc_label.setWordWrap(True)
         self.main_layout.addWidget(self.desc_label)
 
-        # Multilib checkbox (always visible, prominent)
-        self.multilib_check = QCheckBox()
-        self.multilib_check.setChecked(True)  # Enabled by default per user request
-        self.multilib_check.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #FFFFFF; padding: 8px; "
-            "background-color: #16171B; border: 1px solid #2B2C34; border-radius: 6px;"
-        )
-        self.main_layout.addWidget(self.multilib_check)
-        self.main_layout.addSpacing(5)
+        self.search_input = QLineEdit()
+        self.search_input.setClearButtonEnabled(True)
+        self.search_input.textChanged.connect(self._apply_filter)
+        self.main_layout.addWidget(self.search_input)
 
-        # Selected count label
-        self.count_label = QLabel()
-        self.count_label.setStyleSheet("color: #FFFFFF; font-weight: bold; font-size: 13px;")
-        self.count_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.main_layout.addWidget(self.count_label)
-
-        # Scrollable area for package categories
-        from PyQt6.QtWidgets import QScrollArea, QGridLayout
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("""
-            QScrollArea { border: none; background: transparent; }
-            QScrollArea > QWidget > QWidget { background: transparent; }
+        self.package_tree = QTreeWidget()
+        self.package_tree.setColumnCount(1)
+        self.package_tree.setHeaderHidden(True)
+        self.package_tree.setRootIsDecorated(True)
+        self.package_tree.setIndentation(20)
+        self.package_tree.setUniformRowHeights(True)
+        self.package_tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.package_tree.setStyleSheet("""
+            QTreeWidget {
+                background: #17181D;
+                border: 1px solid #2B2C34;
+                border-radius: 6px;
+                color: #E6E6E6;
+                font-size: 13px;
+                outline: none;
+            }
+            QTreeWidget::item { height: 30px; }
+            QTreeWidget::item:hover { background: #252630; }
+            QTreeWidget::item:selected { background: #30313A; color: #FFFFFF; }
+            QScrollBar:vertical {
+                background: #121318;
+                width: 9px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #55565F;
+                border-radius: 4px;
+                min-height: 24px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
         """)
 
-        scroll_content = QWidget()
-        self.grid_layout = QGridLayout(scroll_content)
-        self.grid_layout.setSpacing(10)
+        self.package_items = {}
+        self.package_metadata = {}
+        self.category_items = {}
+        self.category_packages = {}
+        self.custom_packages = set()
+        self.package_tree.blockSignals(True)
 
-        self.category_checkboxes = {}  # {package_name: QCheckBox}
+        categories = [
+            ('extra_cat_zelix', [
+                ('Zelix Hello', 'zelix-hello', 'extra_source_zelix', 'Karşılama ve sistem araçları.', 'Welcome and system tools.', False),
+                ('Zelix Updater', 'zelix-updater', 'extra_source_zelix', 'Sistem güncellemeleri.', 'System updates.', False),
+                ('Zelix CLI', 'zelix-cli', 'extra_source_zelix', 'Komut satırı yönetim aracı.', 'Command-line management.', False),
+            ]),
+            ('extra_cat_utilities_builtin', [
+                ('Dolphin', 'dolphin', 'extra_source_arch', 'Dosya yöneticisi.', 'File manager.', False),
+                ('Konsole', 'konsole', 'extra_source_arch', 'KDE terminali.', 'KDE terminal.', False),
+                ('SDDM Settings', 'sddm-kcm', 'extra_source_arch', 'SDDM yapılandırma modülü.', 'SDDM configuration module.', False),
+            ]),
+            *self.PACKAGE_CATEGORIES,
+        ]
+        for cat_key, packages in categories:
+            category_item = QTreeWidgetItem(self.package_tree)
+            category_item.setFlags(
+                category_item.flags()
+                | Qt.ItemFlag.ItemIsUserCheckable
+            )
+            category_item.setCheckState(0, Qt.CheckState.Unchecked)
+            category_font = category_item.font(0)
+            category_font.setBold(True)
+            category_item.setFont(0, category_font)
 
-        col = 0
-        row = 0
-        for cat_key, packages in self.PACKAGE_CATEGORIES:
-            # Category frame
-            cat_frame = QFrame()
-            cat_frame.setStyleSheet("""
-                QFrame { 
-                    background-color: #16171C; 
-                    border: 1px solid #262730; 
-                    border-radius: 8px; 
-                    padding: 8px; 
+            self.category_items[cat_key] = category_item
+            self.category_packages[cat_key] = []
+
+            for display_name, pkg_name, source_key, desc_tr, desc_en, recommended in packages:
+                package_item = QTreeWidgetItem(category_item)
+                package_item.setFlags(package_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                package_item.setText(0, display_name)
+                package_item.setCheckState(
+                    0, Qt.CheckState.Checked if recommended else Qt.CheckState.Unchecked
+                )
+                package_item.setToolTip(0, f"{pkg_name} - {get_text(source_key)}")
+                self.package_items[pkg_name] = package_item
+                self.package_metadata[pkg_name] = {
+                    "name": display_name,
+                    "source_key": source_key,
+                    "desc_tr": desc_tr,
+                    "desc_en": desc_en,
+                    "recommended": recommended,
+                    "category": cat_key,
                 }
-            """)
-            cat_layout = QVBoxLayout(cat_frame)
-            cat_layout.setSpacing(4)
+                self.category_packages[cat_key].append(pkg_name)
 
-            cat_label = QLabel(get_text(cat_key))
-            cat_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #FFFFFF; border: none; text-transform: uppercase;")
-            cat_layout.addWidget(cat_label)
-            # Store reference for retranslate
-            cat_frame.setProperty("cat_key", cat_key)
-            cat_frame.setProperty("cat_label", cat_label)
+        self.package_tree.blockSignals(False)
+        self.package_tree.itemChanged.connect(self._on_tree_item_changed)
+        self.package_tree.currentItemChanged.connect(self._update_custom_remove_button)
+        self.category_items["extra_cat_browsers"].setExpanded(True)
+        self.main_layout.addWidget(self.package_tree, 1)
 
-            for display_name, pkg_name in packages:
-                cb = QCheckBox(display_name)
-                cb.setStyleSheet("color: #CCCCCC; font-size: 13px; border: none; padding: 2px;")
-                cb.stateChanged.connect(self._update_count)
-                cat_layout.addWidget(cb)
-                self.category_checkboxes[pkg_name] = cb
+        custom_layout = QHBoxLayout()
+        self.custom_package_input = QLineEdit()
+        self.custom_package_input.returnPressed.connect(self._add_custom_package)
+        self.custom_add_btn = QPushButton()
+        self.custom_add_btn.clicked.connect(self._add_custom_package)
+        self.custom_remove_btn = QPushButton()
+        self.custom_remove_btn.setEnabled(False)
+        self.custom_remove_btn.clicked.connect(self._remove_selected_custom_package)
+        custom_layout.addWidget(self.custom_package_input, 1)
+        custom_layout.addWidget(self.custom_add_btn)
+        custom_layout.addWidget(self.custom_remove_btn)
+        self.main_layout.addLayout(custom_layout)
 
-            self.grid_layout.addWidget(cat_frame, row, col)
-            col += 1
-            if col >= 2:
-                col = 0
-                row += 1
+        self.multilib_check = QCheckBox()
+        self.multilib_check.setChecked(True)
+        self.multilib_check.setStyleSheet(
+            "font-size: 12px; color: #D0D0D0; padding: 4px;"
+        )
+        self.main_layout.addWidget(self.multilib_check)
 
-        scroll_area.setWidget(scroll_content)
-        self.main_layout.addWidget(scroll_area)
-
-        # Navigation
         nav_layout = QHBoxLayout()
+        self.count_label = QLabel()
+        self.count_label.setStyleSheet("color: #9E9EA8; font-size: 12px;")
         self.back_btn = QPushButton()
         self.back_btn.clicked.connect(lambda: self.main_window.prev_page())
         self.next_btn = QPushButton()
         self.next_btn.setObjectName("primary_btn")
         self.next_btn.clicked.connect(lambda: self.main_window.next_page())
 
-        nav_layout.addWidget(self.back_btn)
+        nav_layout.addWidget(self.count_label)
         nav_layout.addStretch()
+        nav_layout.addWidget(self.back_btn)
         nav_layout.addWidget(self.next_btn)
         self.main_layout.addLayout(nav_layout)
 
+        self.multilib_check.toggled.connect(self._sync_multilib_requirement)
+        self.multilib_check.toggled.connect(self._mark_custom)
         self.retranslate()
         self._update_count()
 
-    def _update_count(self):
-        count = sum(1 for cb in self.category_checkboxes.values() if cb.isChecked())
-        self.count_label.setText(get_text("extra_selected_count").format(count=count))
+    def _mark_custom(self, *_args):
+        if hasattr(self.main_window, 'profile_page'):
+            self.main_window.profile_page.mark_custom()
+
+    def apply_profile_packages(self, packages):
+        selected = set(packages)
+        self.package_tree.blockSignals(True)
+        for package, item in self.package_items.items():
+            item.setCheckState(0, Qt.CheckState.Checked if package in selected else Qt.CheckState.Unchecked)
+        self.package_tree.blockSignals(False)
+        self.multilib_check.setChecked(False)
+        self._refresh_category_states()
+        self._sync_multilib_requirement()
+        self._update_count()
+
+    def _is_package_selected(self, package):
+        return self.package_items[package].checkState(0) == Qt.CheckState.Checked
+
+    def _set_package_selected(self, package, selected):
+        state = Qt.CheckState.Checked if selected else Qt.CheckState.Unchecked
+        self.package_items[package].setCheckState(0, state)
+
+    @staticmethod
+    def _repository_has_package(package):
+        """Check an exact package name against the enabled pacman repositories."""
+        try:
+            result = subprocess.run(
+                ["pacman", "-Si", "--", package],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+            )
+            return result.returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+
+    def _add_custom_package(self):
+        package = self.custom_package_input.text().strip().lower()
+        if not package:
+            return
+        if not re.fullmatch(r"[a-z0-9][a-z0-9@._+\-]*", package):
+            QMessageBox.warning(
+                self, get_text("extra_custom_check_title"), get_text("extra_custom_invalid")
+            )
+            return
+
+        if package in self.package_items:
+            self._set_package_selected(package, True)
+            metadata = self.package_metadata[package]
+            self.category_items[metadata["category"]].setExpanded(True)
+            self.package_tree.setCurrentItem(self.package_items[package])
+            self.package_tree.scrollToItem(self.package_items[package])
+            self.custom_package_input.clear()
+            return
+
+        if not self._repository_has_package(package):
+            QMessageBox.warning(
+                self,
+                get_text("extra_custom_check_title"),
+                get_text("extra_custom_not_found").format(package=package),
+            )
+            return
+
+        cat_key = "extra_cat_custom"
+        category_item = self.category_items[cat_key]
+        self.package_tree.blockSignals(True)
+        package_item = QTreeWidgetItem(category_item)
+        package_item.setFlags(package_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+        package_item.setText(0, package)
+        package_item.setCheckState(0, Qt.CheckState.Checked)
+        package_item.setToolTip(0, f"{package} - {get_text('extra_source_arch')}")
+
+        self.package_items[package] = package_item
+        self.package_metadata[package] = {
+            "name": package,
+            "source_key": "extra_source_arch",
+            "desc_tr": package,
+            "desc_en": package,
+            "recommended": False,
+            "category": cat_key,
+        }
+        self.category_packages[cat_key].append(package)
+        self.custom_packages.add(package)
+        self._mark_custom()
+        self.package_tree.blockSignals(False)
+        self.custom_package_input.clear()
+        self._refresh_category_states()
+        self._update_count()
+        self._apply_filter()
+        category_item.setExpanded(True)
+        self.package_tree.setCurrentItem(package_item)
+        self.package_tree.scrollToItem(package_item)
+
+    def _selected_custom_package(self):
+        current = self.package_tree.currentItem()
+        if current is None:
+            return None
+        return next(
+            (package for package in self.custom_packages if self.package_items.get(package) is current),
+            None,
+        )
+
+    def _update_custom_remove_button(self, _current=None, _previous=None):
+        self.custom_remove_btn.setEnabled(self._selected_custom_package() is not None)
+
+    def _remove_selected_custom_package(self):
+        package = self._selected_custom_package()
+        if package is None:
+            return
+        item = self.package_items.pop(package)
+        item.parent().removeChild(item)
+        self.package_metadata.pop(package, None)
+        self.category_packages["extra_cat_custom"].remove(package)
+        self.custom_packages.discard(package)
+        self._refresh_category_states()
+        self._update_count()
+        self._apply_filter()
+        self._update_custom_remove_button()
+
+    def unavailable_custom_packages(self):
+        """Revalidate custom packages immediately before installation starts."""
+        return sorted(
+            package for package in self.custom_packages
+            if self._is_package_selected(package) and not self._repository_has_package(package)
+        )
+
+    def _on_tree_item_changed(self, item, _column):
+        self._mark_custom()
+        # Checking a category applies its state to every package beneath it.
+        if item.parent() is None and item.checkState(0) != Qt.CheckState.PartiallyChecked:
+            self.package_tree.blockSignals(True)
+            for index in range(item.childCount()):
+                if not item.child(index).isDisabled():
+                    item.child(index).setCheckState(0, item.checkState(0))
+            self.package_tree.blockSignals(False)
+
+        self._refresh_category_states()
+        self._sync_multilib_requirement()
+        self._update_count()
+
+    def _refresh_category_states(self):
+        self.package_tree.blockSignals(True)
+        for cat_key, category_item in self.category_items.items():
+            packages = self.category_packages[cat_key]
+            selected = sum(self._is_package_selected(package) for package in packages)
+            if selected == 0:
+                state = Qt.CheckState.Unchecked
+            elif selected == len(packages):
+                state = Qt.CheckState.Checked
+            else:
+                state = Qt.CheckState.PartiallyChecked
+            category_item.setCheckState(0, state)
+            category_item.setText(0, f"{get_text(cat_key)}   {selected}/{len(packages)}")
+        self.package_tree.blockSignals(False)
+
+    def _sync_multilib_requirement(self, _checked=False):
+        steam_selected = self._is_package_selected("steam")
+        if steam_selected:
+            self.multilib_check.setChecked(True)
+        self.multilib_check.setEnabled(not steam_selected)
+        key = "extra_multilib_steam" if steam_selected else "extra_multilib"
+        self.multilib_check.setText(get_text(key))
+
+    def _apply_filter(self, _value=None):
+        query = self.search_input.text().strip().casefold()
+
+        for cat_key, category_item in self.category_items.items():
+            category_has_match = False
+            for package in self.category_packages[cat_key]:
+                metadata = self.package_metadata[package]
+                searchable = " ".join((
+                    metadata["name"], package, metadata["desc_tr"], metadata["desc_en"],
+                    PACKAGE_ES.get(package, ''), self.package_items[package].text(0)
+                )).casefold()
+                visible = not query or query in searchable
+                self.package_items[package].setHidden(not visible)
+                category_has_match = category_has_match or visible
+            category_item.setHidden(not category_has_match)
+            if query and category_has_match:
+                category_item.setExpanded(True)
+
+    def _update_count(self, _state=None):
+        count = len(self.get_selected_packages())
+        total = sum(not package.startswith('component:') for package in self.package_items)
+        key = "extra_selected_count_one" if count == 1 else "extra_selected_count"
+        self.count_label.setText(get_text(key).format(count=count, total=total))
 
     def get_selected_packages(self) -> list:
         """Returns list of selected package names."""
-        selected = []
-        for pkg_name, cb in self.category_checkboxes.items():
-            if cb.isChecked():
-                selected.append(pkg_name)
-        return selected
+        return [package for package in self.package_items
+                if not package.startswith('component:') and self._is_package_selected(package)]
+
+    def get_selected_package_names(self) -> list:
+        """Returns user-facing names for the installation summary."""
+        return [
+            self.package_metadata[package]["name"]
+            for package in self.get_selected_packages()
+        ]
 
     def is_multilib_enabled(self) -> bool:
         return self.multilib_check.isChecked()
@@ -1175,21 +1527,30 @@ class ExtraPackagesPage(InstallerPage):
     def retranslate(self):
         self.title_label.setText(get_text("extra_title"))
         self.desc_label.setText(get_text("extra_desc"))
-        self.multilib_check.setText(get_text("extra_multilib"))
+        self.search_input.setPlaceholderText(get_text("extra_search"))
+        self.custom_package_input.setPlaceholderText(get_text("extra_custom_placeholder"))
+        self.custom_add_btn.setText(get_text("extra_custom_add"))
+        self.custom_remove_btn.setText(get_text("extra_custom_remove"))
         self.back_btn.setText(get_text("back"))
         self.next_btn.setText(get_text("next"))
+        self.package_tree.blockSignals(True)
+        for package, metadata in self.package_metadata.items():
+            description = metadata["desc_tr"] if _current_lang == "tr" else metadata["desc_en"]
+            if _current_lang == 'es':
+                description = PACKAGE_ES.get(package, description)
+            item = self.package_items[package]
+            if package.startswith('component:'):
+                name = package.split(':', 1)[1]
+                item.setText(0, get_text('component_' + name))
+                description = get_text('component_' + name + '_desc')
+            item.setToolTip(
+                0, f"{description}\n{package} - {get_text(metadata['source_key'])}"
+            )
+        self.package_tree.blockSignals(False)
+        self._refresh_category_states()
+        self._sync_multilib_requirement()
         self._update_count()
-
-        # Update category labels
-        for row_idx in range(self.grid_layout.rowCount()):
-            for col_idx in range(self.grid_layout.columnCount()):
-                item = self.grid_layout.itemAtPosition(row_idx, col_idx)
-                if item and item.widget():
-                    frame = item.widget()
-                    cat_key = frame.property("cat_key")
-                    cat_label = frame.property("cat_label")
-                    if cat_key and cat_label:
-                        cat_label.setText(get_text(cat_key))
+        self._apply_filter()
 
 
 # ─────────────────────────────────────────────
@@ -1199,9 +1560,11 @@ class ExtraPackagesPage(InstallerPage):
 class SummaryPage(InstallerPage):
     def __init__(self, parent):
         super().__init__(parent)
+        self.main_layout.setContentsMargins(28, 24, 28, 20)
+        self.main_layout.setSpacing(12)
 
         self.title_label = QLabel()
-        self.title_label.setStyleSheet("font-size: 28px; color: #eff0f1; font-weight: bold; margin-bottom: 20px;")
+        self.title_label.setStyleSheet("font-size: 28px; color: #eff0f1; font-weight: bold;")
         self.main_layout.addWidget(self.title_label)
 
         from PyQt6.QtWidgets import QTextBrowser
@@ -1212,14 +1575,13 @@ class SummaryPage(InstallerPage):
                 background-color: #141519;
                 border: 1px solid #262730;
                 border-radius: 8px;
-                padding: 10px;
+                padding: 16px;
                 font-size: 14px;
                 color: #FFFFFF;
             }
         """)
-        self.main_layout.addWidget(self.summary_box)
-
-        self.main_layout.addStretch()
+        self.summary_box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.main_layout.addWidget(self.summary_box, 1)
 
         nav_layout = QHBoxLayout()
         self.back_btn = QPushButton()
@@ -1241,8 +1603,8 @@ class SummaryPage(InstallerPage):
         """Returns one HTML table row for the summary."""
         return (
             f'<tr>'
-            f'<td style="padding:6px 14px 6px 0; color:#AAAAAA; white-space:nowrap;"><b>{label}</b></td>'
-            f'<td style="padding:6px 0; color:{value_color};">{value}</td>'
+            f'<td width="28%" style="padding:7px 18px 7px 0; color:#AAAAAA;"><b>{label}</b></td>'
+            f'<td width="72%" style="padding:7px 0; color:{value_color};">{value}</td>'
             f'</tr>'
         )
 
@@ -1264,10 +1626,7 @@ class SummaryPage(InstallerPage):
 
         disk_sel       = disk_page.disk_combo.currentText()
         mirrors        = ", ".join(mirror_page.get_selected_regions()) or get_text("worldwide")
-        kernels_sel    = ", ".join(
-            d for d, _k in sys_page.KERNELS
-            if d in {i.text() for i in sys_page.kernel_list.selectedItems()}
-        ) or "linux"
+        kernels_sel = ", ".join(item.text() for item in sys_page.kernel_list.selectedItems()) or "linux"
         bootloader_sel = sys_page.bootloader_combo.currentText()
         greeter_sel    = self.main_window.desktop_page.greeter_combo.currentText()
         root_pw_status = (
@@ -1290,21 +1649,16 @@ class SummaryPage(InstallerPage):
         else:
             user_rows = self._row("&nbsp;&nbsp;", get_text("summary_no_users"), "#7f8c8d")
 
-        if _current_lang == "tr":
-            sec_system  = "Sistem"
-            sec_disk    = "Disk"
-            sec_security = "Güvenlik"
-            sec_users   = "Kullanıcılar"
-            sec_extras  = "Ekstra Paketler"
-        else:
-            sec_system  = "System"
-            sec_disk    = "Disk"
-            sec_security = "Security"
-            sec_users   = "Users"
-            sec_extras  = "Extra Packages"
+        sec_system = get_text('section_system')
+        storage = disk_page.storage_settings()
+        home_description = get_text('disk_home_separate').format(filesystem=storage['home_fs']) if storage['separate_home'] else get_text('disk_home_shared')
+        sec_disk = get_text('section_disk')
+        sec_security = get_text('section_security')
+        sec_users = get_text('section_users')
+        sec_extras = get_text('section_extras')
 
         # Build extra packages info
-        extra_pkgs = extra_page.get_selected_packages()
+        extra_pkgs = extra_page.get_selected_package_names()
         multilib_on = extra_page.is_multilib_enabled()
         multilib_status = (
             f'<span style="color:#2ecc71;">&#10003; {get_text("summary_multilib_on")}</span>'
@@ -1318,9 +1672,10 @@ class SummaryPage(InstallerPage):
         else:
             extra_pkgs_display = "-"
 
-        html = f"""
+        summary_html = f"""
         <table width="100%" cellspacing="0" cellpadding="0">
           {self._section(sec_system)}
+          {self._row(get_text('system_language'), dict((locale, name) for name, locale in SYSTEM_LANGUAGES)[sys_page.selected_system_locale()])}
           {self._row(get_text('summary_desktop').replace('<b>','').replace('</b>',''),
                      ", ".join(self.main_window.desktop_page.selected_desktops()))}
           {self._row(get_text('summary_kb_tz').replace('<b>','').replace('</b>',''),
@@ -1337,6 +1692,10 @@ class SummaryPage(InstallerPage):
           {self._row(get_text('summary_disk').replace('<b>','').replace('</b>',''),
                      f'<span style="color:#e74c3c;">{disk_sel}</span>')}
 
+          {self._row(get_text('summary_root_fs'), storage['root_fs'])}
+          {self._row(get_text('summary_home_layout'), home_description)}
+          {self._row(get_text('summary_root_space'), str(storage['root_gib']) + ' GiB' if storage['separate_home'] else get_text('disk_root_all'))}
+
           {self._section(sec_security)}
           {self._row(get_text('summary_root_pw').replace('<b>','').replace('</b>',''),
                      root_pw_status)}
@@ -1345,15 +1704,28 @@ class SummaryPage(InstallerPage):
           {user_rows}
 
           {self._section(sec_extras)}
+          {self._row(get_text('summary_profile'), get_text('profile_' + self.main_window.profile_page.installation_profile()))}
+          {self._row(get_text('summary_components'), html.escape(', '.join(self.main_window.profile_page.get_selected_component_names()) or '-'))}
           {self._row(get_text('summary_multilib').replace('<b>','').replace('</b>',''),
                      multilib_status)}
           {self._row(get_text('summary_extra_pkgs').replace('<b>','').replace('</b>',''),
                      f'<span style="color:#3498db;">{extra_pkgs_display}</span>')}
         </table>
         """
-        self.summary_box.setHtml(html)
+        self.summary_box.setHtml(summary_html)
 
     def start_install_process(self):
+        unavailable = self.main_window.extra_page.unavailable_custom_packages()
+        if unavailable:
+            QMessageBox.warning(
+                self,
+                get_text("extra_custom_check_title"),
+                get_text("extra_custom_recheck_failed").format(
+                    packages="\n".join(f"- {package}" for package in unavailable)
+                ),
+            )
+            return
+
         reply = QMessageBox.question(
             self,
             get_text("confirm_title"),
@@ -1369,13 +1741,19 @@ class SummaryPage(InstallerPage):
             self.main_window.install_page.start_installation()
 
     @staticmethod
-    def _build_package_list(sys_page, desktop_names, greeter, extra_packages=None) -> list:
+    def _build_package_list(sys_page, desktop_names, greeter, extra_packages=None, components=()) -> list:
         """Builds the package list dynamically based on bootloader, DE, and user selections."""
-        base_packages = [
-            "firefox", "dolphin", "konsole", "python-pyqt6", "sudo", "plymouth",
-            "qt6-svg", "qt6-imageformats", "qt6-5compat", "qt5-quickcontrols2", "qt5-graphicaleffects",
-            "fastfetch", "pacman-contrib", "fakeroot", "polkit"
-        ]
+        components = effective_components(components, greeter, sys_page.selected_bootloader())
+        base_packages = ['sudo', 'polkit']
+        if any(desktop.slug == 'kde-plasma' for desktop in desktops_for(desktop_names)):
+            base_packages.append('qt6-translations')
+        if 'desktop-theme' in components:
+            base_packages.extend(['python', *appearance_packages(desktop_names)])
+        if 'plymouth-theme' in components:
+            base_packages.append('plymouth')
+        if 'sddm-theme' in components:
+            base_packages.extend(['qt6-svg', 'qt6-imageformats', 'qt6-5compat',
+                                  'qt5-quickcontrols2', 'qt5-graphicaleffects'])
 
         # Add bootloader-specific packages
         bootloader = sys_page.selected_bootloader()
@@ -1385,25 +1763,16 @@ class SummaryPage(InstallerPage):
             base_packages.append("refind")
         # Systemd-boot doesn't need extra packages
 
-        base_packages.extend(appearance_packages(desktop_names))
         if {"Hyprland", "Sway"}.intersection(desktop_names):
             base_packages.append("polkit")
         if greeter == "lightdm-gtk-greeter":
             base_packages.extend(["lightdm", greeter])
         else:
             base_packages.append(greeter)
-        if greeter == "sddm":
-            base_packages.append("sddm-kcm")
 
         # ZelixRepo packages must NOT be passed to archinstall/pacstrap directly,
         # because archinstall only knows official Arch repos. They will be installed
         # post-install after zelixrepo is added to pacman.conf.
-        zelixrepo_set = {
-            "yay", "paru", "zelix-hello", "zelix-updater",
-            "mkinitcpio-openswap", "alci-calamares", "calamares",
-            "ckbcomp", "gquick-git", "qrun-code-git"
-        }
-
         # Add user-selected extra packages (skip flatpak: and zelixrepo packages)
         if extra_packages:
             for pkg in extra_packages:
@@ -1411,7 +1780,10 @@ class SummaryPage(InstallerPage):
                     # Flatpak apps will be installed post-install
                     if "flatpak" not in base_packages:
                         base_packages.append("flatpak")
-                elif pkg in zelixrepo_set:
+                elif pkg.startswith("aur:"):
+                    # AUR packages are installed after archinstall as a regular user.
+                    continue
+                elif pkg in ZELIX_PACKAGES:
                     # Zelixrepo packages will be installed post-install
                     continue
                 else:
@@ -1450,22 +1822,23 @@ class SummaryPage(InstallerPage):
         # --- Extra packages ---
         extra_packages = extra_page.get_selected_packages()
         multilib_enabled = extra_page.is_multilib_enabled()
+        components = self.main_window.profile_page.get_selected_components()
 
         # --- Mirror regions ---
-        selected_regions = mirror_page.get_selected_regions()
-        if not selected_regions:
-            selected_regions = ["Worldwide"]
-        mirror_dict = {region: [] for region in selected_regions}
+        mirror_dict = mirror_page.get_selected_mirrors()
+        if not mirror_dict:
+            mirror_dict = {"Worldwide": list(mirror_page.WORLDWIDE_MIRRORS)}
 
         # --- Disk info ---
         selected_disk_path = disk_page.disk_combo.currentText().split(" ")[0]
         desktop_page = self.main_window.desktop_page
         selected_desktops = desktop_page.selected_desktops()
         total_bytes = get_disk_size_bytes(selected_disk_path)
+        storage = disk_page.storage_settings()
         try:
             greeter = desktop_page.selected_greeter()
             if not os.path.exists(selected_disk_path):
-                raise ValueError("Hedef disk bulunamadı / Target disk is unavailable.")
+                raise ValueError("policy_disk_missing")
             # A mounted target may contain the running/live system or user data.
             result = subprocess.run(
                 ["lsblk", "--json", "--output", "TYPE,MOUNTPOINTS", selected_disk_path],
@@ -1475,13 +1848,13 @@ class SummaryPage(InstallerPage):
                 return any(device.get("mountpoints") or []) or any(
                     mounted(child) for child in device.get("children", []))
             if not devices or devices[0]["type"] != "disk" or any(mounted(d) for d in devices):
-                raise ValueError("Bağlı/kullanılan disk seçilemez / Target disk must be unmounted.")
+                raise ValueError("policy_disk_mounted")
             validate_choices(total_bytes, is_uefi(), sys_page.selected_bootloader(),
                              sys_page.selected_kernels(), multilib_enabled, extra_packages)
+            partition_list = disk_page.planned_partitions(total_bytes)
         except (ValueError, OSError, subprocess.SubprocessError) as e:
-            QMessageBox.critical(self, "Disk / Configuration", str(e))
+            QMessageBox.critical(self, get_text("config_error"), get_text(str(e)))
             return False
-        partition_list = build_partitions(total_bytes, is_uefi(), len(sys_page.selected_kernels()))
 
         # ═══════════════════════════════════════════════════════════
         # 1. MAIN CONFIG — archinstall 4.x compatible
@@ -1519,13 +1892,13 @@ class SummaryPage(InstallerPage):
             "locale_config": {
                 "kb_layout": sys_page.kb_combo.currentText(),
                 "sys_enc": "UTF-8",
-                "sys_lang": "en_US.UTF-8",
+                "sys_lang": sys_page.selected_system_locale(),
             },
 
             "network_config": {"type": "nm"},
 
             "ntp": True,
-            "packages": self._build_package_list(sys_page, selected_desktops, greeter, extra_packages),
+            "packages": self._build_package_list(sys_page, selected_desktops, greeter, extra_packages, components),
             "parallel_downloads": 0,
 
             "additional_repositories": ["multilib"] if multilib_enabled else [],
@@ -1547,6 +1920,11 @@ class SummaryPage(InstallerPage):
             "swap": {"enabled": True, "algorithm": "zstd"},
             "timezone": sys_page.tz_combo.currentText(),
         }
+
+        for partition in partition_list:
+            if filesystem_package := FILESYSTEM_PACKAGES.get(partition['fs_type']):
+                arch_config['packages'].append(filesystem_package)
+        arch_config['packages'] = list(dict.fromkeys(arch_config['packages']))
 
         # ═══════════════════════════════════════════════════════════
         # 2. USER CREDENTIALS (CREDS)
@@ -1591,13 +1969,16 @@ class SummaryPage(InstallerPage):
 
             self.main_window.install_target = {
                 "disk": selected_disk_path,
+                "storage": storage,
                 "root": partition_path(selected_disk_path, 2),
                 "boot": partition_path(selected_disk_path, 1),
                 "home": partition_path(selected_disk_path, 3) if len(partition_list) == 3 else "-",
                 "desktops": [desktop.slug for desktop in desktops_for(selected_desktops)], "greeter": greeter,
                 "bootloader": sys_page.selected_bootloader(),
                 "multilib": "true" if multilib_enabled else "false",
-                "packages": [pkg for pkg in extra_packages if pkg in ZELIX_PACKAGES],
+                "packages": post_install_packages(extra_packages),
+                "components": components,
+                "installation_type": self.main_window.profile_page.installation_profile(),
             }
             self.main_window.install_config_path = config_path
             self.main_window.install_creds_path = creds_path
@@ -1613,7 +1994,7 @@ class SummaryPage(InstallerPage):
                     os.remove(creds_path)
                 except Exception:
                     pass
-            QMessageBox.critical(self, "Error", f"Install config generation failed:\n{e}")
+            QMessageBox.critical(self, get_text("error_title"), get_text("config_failed").format(error=e))
             return False
 
     def retranslate(self):
@@ -1668,6 +2049,9 @@ class InstallProgressPage(InstallerPage):
         self.process.finished.connect(self.process_finished)
         self.process.errorOccurred.connect(self.process_error)
         self.log_path = None
+        self.expected_completion = None
+        self.completion_received = False
+        self._completion_output = ''
 
         self.retranslate()
 
@@ -1676,7 +2060,14 @@ class InstallProgressPage(InstallerPage):
         creds_path = getattr(self.main_window, "install_creds_path", None)
 
         if not config_path or not creds_path:
-            QMessageBox.critical(self, "Error", "Installation config files could not be found.")
+            QMessageBox.critical(self, get_text("error_title"), get_text("config_missing"))
+            return
+
+        try:
+            with open(config_path, 'rb') as config_stream:
+                self.expected_completion = hashlib.file_digest(config_stream, 'sha256').hexdigest()
+        except OSError:
+            self.install_failed(get_text('config_missing'))
             return
 
         self.log_console.clear()
@@ -1696,6 +2087,13 @@ class InstallProgressPage(InstallerPage):
         data = self.process.readAllStandardOutput()
         raw_text = bytes(data).decode("utf8", errors="replace")
         clean_text = self.ansi_escape.sub('', raw_text)
+        # A normal process exit alone cannot prove that post-install ran.
+        # Preserve chunk boundaries until the complete per-install receipt arrives.
+        self._completion_output = (self._completion_output + clean_text.replace('\r\n', '\n'))[-4096:]
+        if self.expected_completion:
+            receipt = '\nZELIX_INSTALL_VERIFIED=' + self.expected_completion + '\n'
+            if receipt in '\n' + self._completion_output:
+                self.completion_received = True
         if self.log_path:
             with open(self.log_path, "a", encoding="utf-8") as log:
                 log.write(clean_text)
@@ -1718,10 +2116,11 @@ class InstallProgressPage(InstallerPage):
         self.title_label.setStyleSheet("font-size: 28px; color: #e74c3c;")
         self.log_console.appendPlainText(message)
         self.main_window.cleanup_install_files()
+        self.main_window.disk_page.clear_secrets()
 
     def process_error(self, error):
         if error == QProcess.ProcessError.FailedToStart:
-            self.install_failed("İşlem başlatılamadı / Process could not start: " + self.process.errorString())
+            self.install_failed(get_text("process_failed").format(error=self.process.errorString()))
 
     def run_post_install(self):
         base = os.path.dirname(os.path.realpath(__file__))
@@ -1729,7 +2128,7 @@ class InstallProgressPage(InstallerPage):
         script = os.path.join(base, "zelix_post_install.sh")
         target = getattr(self.main_window, "install_target", None)
         if not target or not os.path.isdir(deps) or not os.path.isfile(script):
-            self.install_failed("Kurulum sonrası dosyalar eksik / Missing post-install files.")
+            self.install_failed(get_text("post_missing"))
             return
         try:
             result = subprocess.run(
@@ -1741,28 +2140,36 @@ class InstallProgressPage(InstallerPage):
             expected = {target[k] for k in ("root", "boot", "home") if target[k] != "-"}
             if not expected.issubset(parts):
                 raise ValueError(
-                    "Hedef bölümler doğrulanamadı / Could not verify target partitions. "
-                    f"Disk: {target['disk']}; missing: {', '.join(sorted(expected - parts))}; "
-                    f"found: {', '.join(sorted(parts)) or '-'}")
+                    get_text('post_partitions').format(
+                        disk=target['disk'], missing=', '.join(sorted(expected - parts)),
+                        found=', '.join(sorted(parts)) or '-'))
         except (ValueError, OSError, subprocess.SubprocessError) as e:
             self.install_failed(str(e))
             return
         self.process.finished.disconnect(self.process_finished)
         self.process.finished.connect(self.post_install_finished)
-        args = [script, target["root"], target["boot"], target["home"], deps,
+        self.completion_received = False
+        self._completion_output = ''
+        args = [script, '--config', self.main_window.install_config_path,
+                '--creds', self.main_window.install_creds_path, target["root"], target["boot"], target["home"], deps,
                 ",".join(target["desktops"]), target["greeter"], target["bootloader"], target["multilib"],
-                *target["packages"]]
+                ",".join(target["components"]) or "-", *target["packages"]]
         self.process.start("/bin/bash" if os.geteuid() == 0 else "pkexec",
                            args if os.geteuid() == 0 else ["/bin/bash", *args])
 
     def post_install_finished(self, exit_code, exit_status):
+        self.handle_stdout()
         if exit_code != 0 or exit_status != QProcess.ExitStatus.NormalExit:
-            self.install_failed("ZelixOS yapılandırması başarısız / Post-install failed. Log: " + self.log_path)
+            self.install_failed(get_text("post_failed").format(log=self.log_path))
+            return
+        if self.completion_received is not True:
+            self.install_failed(get_text('post_failed').format(log=self.log_path))
             return
         self.title_label.setText(get_text("install_title_done"))
         self.log_console.appendPlainText(get_text("install_done_msg"))
         self.finish_btn.show()
         self.main_window.cleanup_install_files()
+        self.main_window.disk_page.clear_secrets()
 
     def retranslate(self):
         self.title_label.setText(get_text("install_title_running"))
@@ -1776,7 +2183,7 @@ class InstallProgressPage(InstallerPage):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ZelixOS Installer v1.2.2")
+        self.setWindowTitle("ZelixOS Installer")
         for icon_candidate in (
             "/usr/share/zelix/zelix-installer.png",
             "/usr/share/pixmaps/zelix-installer.png",
@@ -1788,51 +2195,9 @@ class MainWindow(QWidget):
         self.setMinimumSize(800, 600)
         self.resize(1024, 720)
 
-        main_layout = QHBoxLayout(self)
+        main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-
-        # Left sidebar
-        sidebar = QFrame()
-        sidebar.setFixedWidth(250)
-        sidebar.setStyleSheet("background-color: #0C0D10; border-right: 1px solid #1C1D24;")
-
-        sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(20, 40, 20, 20)
-
-        logo_container = QHBoxLayout()
-        logo_container.setContentsMargins(0, 0, 0, 0)
-        logo_container.setSpacing(10)
-
-        side_logo_label = QLabel()
-        side_logo_label.setFixedSize(32, 32)
-        side_logo_label.setStyleSheet("border: none; background: transparent;")
-        
-        dirr = os.path.dirname(os.path.realpath(__file__))
-        local_logo = os.path.join(dirr, "icons", "zelixos_logo.png")
-        logo_path = local_logo if os.path.exists(local_logo) else "/usr/share/zelixins/icons/zelixos_logo.png"
-        
-        side_logo_pixmap = QPixmap(logo_path)
-        if not side_logo_pixmap.isNull():
-            scaled_side_logo = side_logo_pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            side_logo_label.setPixmap(scaled_side_logo)
-        
-        logo_text = QLabel("ZelixOS")
-        logo_text.setStyleSheet("font-size: 24px; font-weight: bold; color: #FFFFFF; border: none; background: transparent;")
-        
-        logo_container.addWidget(side_logo_label)
-        logo_container.addWidget(logo_text)
-        logo_container.addStretch()
-        
-        sidebar_layout.addLayout(logo_container)
-        sidebar_layout.addSpacing(40)
-
-        # Step labels — refreshed by retranslate_all()
-        self.step_labels = [QLabel() for _ in range(9)]
-        for lbl in self.step_labels:
-            sidebar_layout.addWidget(lbl)
-
-        sidebar_layout.addStretch()
 
         # Right content area
         content_frame = QFrame()
@@ -1848,7 +2213,7 @@ class MainWindow(QWidget):
             SystemConfigPage(self),
             DesktopPage(self, get_text, lambda: _current_lang),
             MirrorConfigPage(self),
-            DiskConfigPage(self),
+            DiskConfigPage(self, get_text, scan_disks, get_disk_size_bytes, is_uefi),
             UserAccountPage(self),
             ExtraPackagesPage(self),
             SummaryPage(self),
@@ -1857,12 +2222,25 @@ class MainWindow(QWidget):
         for name, page in zip(("welcome_page", "system_page", "desktop_page", "mirror_page",
                                "disk_page", "user_page", "extra_page", "summary_page", "install_page"), self.pages):
             setattr(self, name, page)
+        self.system_page.kernel_list.itemSelectionChanged.connect(self.disk_page.refresh_layout)
+        self.profile_page = InstallationTypePage(self, get_text)
+        self.pages.insert(2, self.profile_page)
         for page in self.pages:
             self.stacked_widget.addWidget(page)
 
         content_layout.addWidget(self.stacked_widget)
-        main_layout.addWidget(sidebar)
-        main_layout.addWidget(content_frame)
+        main_layout.addWidget(content_frame, 1)
+        self.navigator = BottomNavigation(self, len(self.pages), get_text)
+        self.step_labels = self.navigator.step_buttons
+        main_layout.addWidget(self.navigator)
+        # Keep each page's existing validation/confirmation handlers as the actions.
+        for page in self.pages:
+            if page is self.install_page:
+                continue
+            for name in ('back_btn', 'next_btn', 'start_btn', 'finish_btn'):
+                button = getattr(page, name, None)
+                if button is not None:
+                    button.hide()
 
         self.install_config_path = None
         self.install_creds_path = None
@@ -1928,6 +2306,32 @@ class MainWindow(QWidget):
         """)
 
         self.retranslate_all()
+        self.footer_timer = QTimer(self)
+        self.footer_timer.timeout.connect(self.sync_footer)
+        self.footer_timer.start(250)
+
+    def forward_control(self):
+        page = self.stacked_widget.currentWidget()
+        if page is self.install_page:
+            return None
+        if page is self.welcome_page:
+            return page.start_btn
+        if page is self.summary_page:
+            return page.finish_btn
+        return page.next_btn
+
+    def continue_from_footer(self):
+        button = self.forward_control()
+        if button is not None and button.isEnabled():
+            button.click()
+        self.sync_footer()
+
+    def go_back_from_footer(self):
+        if self.stacked_widget.currentWidget() is not self.install_page:
+            self.prev_page()
+
+    def sync_footer(self):
+        self.navigator.sync(self.stacked_widget.currentIndex(), self.pages.index(self.install_page), self.forward_control())
 
     def cleanup_install_files(self):
         for attr in ("install_config_path", "install_creds_path"):
@@ -1946,17 +2350,16 @@ class MainWindow(QWidget):
     def closeEvent(self, event):
         progress = self.install_page
         if progress.process.state() != QProcess.ProcessState.NotRunning:
-            QMessageBox.warning(self, "Kurulum / Installation", "İşlem sürüyor / Installation is still running.")
+            QMessageBox.warning(self, get_text("step_10"), get_text("still_running"))
             event.ignore()
             return
         self.cleanup_install_files()
+        self.disk_page.clear_secrets()
         event.accept()
 
     def retranslate_all(self):
         """Re-applies all translatable strings to every page and sidebar."""
-        step_keys = [f"step_{i}" for i in range(1, len(self.pages)+1)]
-        for lbl, key in zip(self.step_labels, step_keys):
-            lbl.setText(get_text(key))
+        self.navigator.retranslate()
 
         for page in self.pages:
             page.retranslate()
@@ -1965,40 +2368,54 @@ class MainWindow(QWidget):
 
     def next_page(self):
         idx = self.stacked_widget.currentIndex()
-        if self.stacked_widget.currentWidget() is self.desktop_page:
+        self.go_to_page(idx + 1, allow_install_page=True)
+
+    def go_to_page(self, target_index, allow_install_page=False):
+        """Navigate to a setup page while preserving installer safety checks."""
+        current_index = self.stacked_widget.currentIndex()
+        install_index = self.pages.index(self.install_page)
+
+        if not 0 <= target_index < len(self.pages):
+            return False
+
+        # Installation is intentionally one-way once the process page opens.
+        if current_index == install_index and target_index != install_index:
+            return False
+
+        # The progress page may only be opened by SummaryPage after the user
+        # confirms the destructive disk operation.
+        if target_index == install_index and not allow_install_page:
+            return False
+
+        # Keep the desktop/greeter compatibility validation when skipping
+        # forward via either the Next button or the clickable sidebar.
+        if current_index == self.pages.index(self.desktop_page) and target_index > current_index:
             try:
                 self.desktop_page.selected_greeter()
             except ValueError as error:
-                QMessageBox.warning(self, get_text("greeter"), str(error))
-                return
-        if idx < self.stacked_widget.count() - 1:
-            if self.pages[idx+1] is self.summary_page:
-                self.summary_page.update_summary()
-            self.stacked_widget.setCurrentIndex(idx + 1)
-            self.update_sidebar()
+                QMessageBox.warning(self, get_text("greeter"), get_text(str(error)))
+                return False
+
+        if current_index == self.pages.index(self.disk_page) and target_index > current_index:
+            if not self.disk_page.validate_settings():
+                return False
+
+        self.profile_page.refresh_compatibility()
+
+        if self.pages[target_index] is self.summary_page:
+            self.summary_page.update_summary()
+
+        self.stacked_widget.setCurrentIndex(target_index)
+        self.update_sidebar()
+        return True
 
     def prev_page(self):
         idx = self.stacked_widget.currentIndex()
-        # Block going back once installation has started.
-        if idx > 0 and self.stacked_widget.currentWidget() is not self.install_page:
-            self.stacked_widget.setCurrentIndex(idx - 1)
-            self.update_sidebar()
+        self.go_to_page(idx - 1)
 
     def update_sidebar(self):
-        idx = self.stacked_widget.currentIndex()
-        for i, lbl in enumerate(self.step_labels):
-            if i == idx:
-                lbl.setStyleSheet(
-                    "font-size: 15px; margin-bottom: 14px; color: #FFFFFF; font-weight: bold;"
-                )
-            elif i < idx:
-                lbl.setStyleSheet(
-                    "font-size: 15px; margin-bottom: 14px; color: #888892;"
-                )
-            else:
-                lbl.setStyleSheet(
-                    "font-size: 15px; margin-bottom: 14px; color: #3A3B44;"
-                )
+        # Retained as the shared page-change hook used by existing navigation.
+        self.sync_footer()
 
 
 if __name__ == "__main__":

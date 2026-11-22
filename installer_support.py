@@ -1,11 +1,12 @@
 """Side-effect-free policy shared by the installer and its tests."""
-import uuid
+from disk_layout import build_partitions, partition_device as partition_path
 
 from desktop_catalog import DESKTOPS, GREETER_SERVICES, choose_greeter
+from install_profiles import ZELIX_APPS
 
 GREETERS = {desktop.name: desktop.recommended for desktop in DESKTOPS}
 MULTILIB_PACKAGES = {'steam'}
-ZELIX_PACKAGES = {'yay', 'paru', 'zelix-hello', 'zelix-updater', 'mkinitcpio-openswap',
+ZELIX_PACKAGES = {'yay', 'paru', *ZELIX_APPS, 'mkinitcpio-openswap',
                   'alci-calamares', 'calamares', 'ckbcomp', 'gquick-git', 'qrun-code-git'}
 
 
@@ -13,42 +14,24 @@ def selected_greeter(desktops, choice):
     return choose_greeter(desktops, choice)
 
 
+def post_install_packages(selected_packages):
+    """Only selected Zelix repository and AUR applications are installed."""
+    packages = (
+        package for package in selected_packages
+        if package in ZELIX_PACKAGES or package.startswith('aur:')
+    )
+    return list(dict.fromkeys(packages))
+
+
 def validate_choices(size_bytes, uefi, bootloader, kernels, multilib, packages):
     if size_bytes < 25 * 1024**3:
-        raise ValueError('Disk en az 25 GiB olmalı / Disk must be at least 25 GiB.')
+        raise ValueError('policy_disk_size')
     if not uefi and bootloader != 'Grub':
-        raise ValueError('BIOS kurulumunda GRUB seçilmeli / BIOS requires GRUB.')
+        raise ValueError('policy_bios')
     if not kernels:
-        raise ValueError('En az bir çekirdek seçin / Select at least one kernel.')
+        raise ValueError('policy_kernel')
     if not multilib and MULTILIB_PACKAGES.intersection(packages):
-        raise ValueError('Steam için multilib gerekli / Steam requires multilib.')
-
-
-def partition_path(disk, number):
-    return f'{disk}{"p" if disk[-1].isdigit() else ""}{number}'
-
-
-def build_partitions(size_bytes, uefi, kernel_count):
-    # Reserve room for several kernel + fallback initramfs images on the ESP.
-    boot_mib = max(1024, 512 * kernel_count)
-    usable = size_bytes // (1024**2) - boot_mib - 2
-    root_mib = min(max(int(usable * .4), 20 * 1024), 100 * 1024)
-    home_mib = usable - root_mib
-    if home_mib < 4 * 1024:
-        root_mib, home_mib = usable, 0
-    def part(start, size, fs, mount, flags):
-        def units(n):
-            return {'sector_size': {'unit': 'B', 'value': 512}, 'unit': 'MiB', 'value': n}
-        return {'btrfs': [], 'flags': flags, 'fs_type': fs, 'start': units(start),
-                'size': units(size), 'mount_options': [], 'mountpoint': mount,
-                'status': 'create', 'type': 'primary', 'dev_path': None,
-                'obj_id': str(uuid.uuid4())}
-    parts = [part(1, boot_mib, 'fat32' if uefi else 'ext4', '/boot',
-                  ['boot', 'esp'] if uefi else ['boot']),
-             part(1 + boot_mib, root_mib, 'ext4', '/', [])]
-    if home_mib:
-        parts.append(part(1 + boot_mib + root_mib, home_mib, 'ext4', '/home', []))
-    return parts
+        raise ValueError('policy_multilib')
 
 
 def configure_multilib(text, enabled):
