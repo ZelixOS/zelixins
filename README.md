@@ -2,6 +2,10 @@
 
 The graphical installer for ZelixOS, written in Python and PyQt6. It uses Archinstall and provides a single interface for user accounts, disks, kernels, desktops, and bootloaders.
 
+![Zelixins graphical installer](docs/images/zelixins.png)
+
+The interface is available in English, Turkish, and Spanish. The selected language controls the installer UI; the installed system locale is configured separately.
+
 ## Features
 
 - English, Turkish, and Spanish interface with an independent installed-system locale.
