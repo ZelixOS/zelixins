@@ -91,7 +91,8 @@ SigLevel = Optional TrustAll
 Server = https://github.com/ZelixOS/zelix-repo/releases/download/stable
 EOF
 fi
-PACMAN_PACKAGES=()
+# Own /etc/lsb-release before the ZelixOS branding stage writes to it.
+PACMAN_PACKAGES=(lsb-release)
 AUR_PACKAGES=()
 for package in "$@"; do
     if [[ $package == aur:* ]]; then
